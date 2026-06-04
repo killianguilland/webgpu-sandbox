@@ -1,5 +1,6 @@
 pub mod app;
-pub mod state;
+mod state;
+mod texture;
 
 use crate::app::App;
 
