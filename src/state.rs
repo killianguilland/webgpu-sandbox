@@ -9,6 +9,8 @@ use winit::{
 
 use wgpu::util::DeviceExt;
 
+use crate::texture;
+
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 #[cfg(target_arch = "wasm32")]
@@ -142,14 +144,6 @@ impl CameraController {
 
 
 // Shader pipelines
-
-use crate::{state::Pipeline::{ColorPipeline, TexturePipeline, WhitePipeline}, texture};
-
-enum Pipeline {
-    WhitePipeline,
-    ColorPipeline,
-    TexturePipeline
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -310,10 +304,7 @@ pub struct State {
     is_surface_configured: bool,
     window: Arc<Window>,
     clear_color: wgpu::Color,
-    pipeline: Pipeline,
-    white_render_pipeline: wgpu::RenderPipeline,
-    color_render_pipeline: wgpu::RenderPipeline,
-    texture_render_pipeline: wgpu::RenderPipeline,
+    render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     // num_vertices: u32,
     index_buffer: wgpu::Buffer, 
@@ -536,13 +527,9 @@ impl State {
             immediate_size: 0,
         });
 
-        let white_shader = device.create_shader_module(wgpu::include_wgsl!("white_shader.wgsl"));
-        let color_shader = device.create_shader_module(wgpu::include_wgsl!("color_shader.wgsl"));
-        let texture_shader = device.create_shader_module(wgpu::include_wgsl!("texture_shader.wgsl"));
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
-        let white_render_pipeline = build_pipeline(&device, &config, &white_shader, &render_pipeline_layout);
-        let color_render_pipeline = build_pipeline(&device, &config, &color_shader, &render_pipeline_layout);
-        let texture_render_pipeline = build_pipeline(&device, &config, &texture_shader, &render_pipeline_layout);
+        let render_pipeline = build_pipeline(&device, &config, &shader, &render_pipeline_layout);
 
         let vertex_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -574,10 +561,7 @@ impl State {
                 b: 0.0,
                 a: 1.0,
             },
-            white_render_pipeline,
-            color_render_pipeline,
-            texture_render_pipeline,
-            pipeline: Pipeline::WhitePipeline,
+            render_pipeline,
             vertex_buffer,
             // num_vertices,
             index_buffer,
@@ -621,11 +605,6 @@ impl State {
     pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
         match (code, is_pressed) {
             (KeyCode::Escape, true) => event_loop.exit(),
-            (KeyCode::Space, true) => match self.pipeline {
-                WhitePipeline => self.pipeline = Pipeline::ColorPipeline,
-                ColorPipeline => self.pipeline = Pipeline::TexturePipeline,
-                TexturePipeline => self.pipeline = Pipeline::WhitePipeline
-            }
             _ => {
                self.camera_controller.handle_key(code, is_pressed);
             }
@@ -722,11 +701,7 @@ impl State {
                 multiview_mask: None,
             });
             
-            match &self.pipeline {
-                WhitePipeline => render_pass.set_pipeline(&self.white_render_pipeline),
-                ColorPipeline => render_pass.set_pipeline(&self.color_render_pipeline),
-                TexturePipeline => render_pass.set_pipeline(&self.texture_render_pipeline),
-            }
+            render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
