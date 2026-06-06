@@ -1,6 +1,8 @@
 pub mod app;
 mod state;
 mod texture;
+mod model;
+mod resources;
 
 use crate::app::App;
 
