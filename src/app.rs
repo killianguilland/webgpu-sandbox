@@ -12,14 +12,14 @@ use winit::{
 
 pub struct App {
     state: Option<State>,
-    last_frame: Instant,
+    last_render_time: Instant,
 }
 
 impl App {
     pub fn new() -> Self {
         Self {
             state: None,
-            last_frame: Instant::now(),
+            last_render_time: Instant::now(),
         }
     }
 }
@@ -37,7 +37,7 @@ impl ApplicationHandler<State> for App {
         // If we are not on web we can use pollster to
         // await the window creation
         self.state = Some(pollster::block_on(State::new(window)).unwrap());
-        self.last_frame = Instant::now();
+        self.last_render_time = Instant::now();
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: State) {
@@ -74,8 +74,8 @@ impl ApplicationHandler<State> for App {
             }
             WindowEvent::RedrawRequested => {
                 let now = Instant::now();
-                let dt = now - self.last_frame;
-                self.last_frame = now;
+                let dt = now - self.last_render_time;
+                self.last_render_time = now;
 
                 state.update(dt);
                 if let Err(error) = state.render() {

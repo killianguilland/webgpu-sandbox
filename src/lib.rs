@@ -4,7 +4,7 @@ mod texture;
 mod model;
 mod resources;
 mod camera;
-//mod hdr;
+mod hdr;
 
 use crate::app::App;
 
