@@ -59,8 +59,11 @@ pub struct Model {
 }
 
 pub struct Material {
+    #[allow(unused)]
     pub name: String,
+    #[allow(unused)]
     pub diffuse_texture: texture::Texture,
+    #[allow(unused)]
     pub normal_texture: texture::Texture,
     pub bind_group: wgpu::BindGroup,
 }
@@ -108,6 +111,7 @@ impl Material {
 
 
 pub struct Mesh {
+    #[allow(unused)]
     pub name: String,
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
@@ -116,6 +120,7 @@ pub struct Mesh {
 }
 
 pub trait DrawModel<'a> {
+    #[allow(unused)]
     fn draw_mesh(
         &mut self,
         mesh: &'a Mesh,
@@ -132,6 +137,7 @@ pub trait DrawModel<'a> {
         light_bind_group: &'a wgpu::BindGroup,
     );
 
+    #[allow(unused)]
     fn draw_model(
         &mut self,
         model: &'a Model,
@@ -146,6 +152,7 @@ pub trait DrawModel<'a> {
         light_bind_group: &'a wgpu::BindGroup,
     );
 
+    #[allow(unused)]
     fn draw_model_instanced_with_material(
         &mut self,
         model: &'a Model,
@@ -224,6 +231,7 @@ where
 
 // model.rs
 pub trait DrawLight<'a> {
+    #[allow(unused)]
     fn draw_light_mesh(
         &mut self,
         mesh: &'a Mesh,

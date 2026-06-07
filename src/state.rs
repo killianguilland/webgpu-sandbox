@@ -3,15 +3,15 @@ use std::{sync::Arc};
 use cgmath::prelude::*;
 
 use winit::{
-    window::Window, event_loop::{ActiveEventLoop}, keyboard::{KeyCode},
+    event::{ElementState, KeyEvent, MouseButton, WindowEvent}, keyboard::{PhysicalKey}, window::Window
 };
 
 use wgpu::util::DeviceExt;
 
 use crate::{model::{self, Model}, texture::{self}};
 use crate::resources;
-
 use crate::model::Vertex;
+use crate::camera;
 
 // lib.rs
 #[repr(C)]
@@ -23,37 +23,6 @@ struct LightUniform {
     color: [f32; 3],
     // Due to uniforms requiring 16 byte (4 float) spacing, we need to use a padding field here
     _padding2: u32,
-}
-
-
-#[rustfmt::skip]
-pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
-    cgmath::Vector4::new(1.0, 0.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 1.0, 0.0, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 0.0),
-    cgmath::Vector4::new(0.0, 0.0, 0.5, 1.0),
-);
-
-struct Camera {
-    eye: cgmath::Point3<f32>,
-    target: cgmath::Point3<f32>,
-    up: cgmath::Vector3<f32>,
-    aspect: f32,
-    fovy: f32,
-    znear: f32,
-    zfar: f32,
-}
-
-impl Camera {
-    fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
-        // 1.
-        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
-        // 2.
-        let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
-
-        // 3.
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
-    }
 }
 
 #[repr(C)]
@@ -75,86 +44,11 @@ impl CameraUniform {
         }
     }
 
-    fn update_view_proj(&mut self, camera: &Camera) {
-        self.view_position = camera.eye.to_homogeneous().into();
-        self.view_proj = camera.build_view_projection_matrix().into();
+    fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
+        self.view_position = camera.position.to_homogeneous().into();
+        self.view_proj = (projection.calc_matrix() * camera.calc_matrix()).into();
     }
 }
-
-struct CameraController {
-    speed: f32,
-    is_forward_pressed: bool,
-    is_backward_pressed: bool,
-    is_left_pressed: bool,
-    is_right_pressed: bool,
-}
-
-impl CameraController {
-    fn new(speed: f32) -> Self {
-        Self {
-            speed,
-            is_forward_pressed: false,
-            is_backward_pressed: false,
-            is_left_pressed: false,
-            is_right_pressed: false,
-        }
-    }
-
-    fn handle_key(&mut self, code: KeyCode, is_pressed: bool) -> bool {
-        match code {
-            KeyCode::KeyW | KeyCode::ArrowUp => {
-                self.is_forward_pressed = is_pressed;
-                true
-            }
-            KeyCode::KeyA | KeyCode::ArrowLeft => {
-                self.is_left_pressed = is_pressed;
-                true
-            }
-            KeyCode::KeyS | KeyCode::ArrowDown => {
-                self.is_backward_pressed = is_pressed;
-                true
-            }
-            KeyCode::KeyD | KeyCode::ArrowRight => {
-                self.is_right_pressed = is_pressed;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    fn update_camera(&self, camera: &mut Camera) {
-        use cgmath::InnerSpace;
-        let forward = camera.target - camera.eye;
-        let forward_norm = forward.normalize();
-        let forward_mag = forward.magnitude();
-
-        // Prevents glitching when the camera gets too close to the
-        // center of the scene.
-        if self.is_forward_pressed && forward_mag > self.speed {
-            camera.eye += forward_norm * self.speed;
-        }
-        if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed;
-        }
-
-        let right = forward_norm.cross(camera.up);
-
-        // Redo radius calc in case the forward/backward is pressed.
-        let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
-
-        if self.is_right_pressed {
-            // Rescale the distance between the target and the eye so 
-            // that it doesn't change. The eye, therefore, still 
-            // lies on the circle made by the target and eye.
-            camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
-        }
-        if self.is_left_pressed {
-            camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
-        }
-    }
-}
-
 
 // Shader pipelines
 
@@ -332,23 +226,23 @@ pub struct State {
     config: wgpu::SurfaceConfiguration,
     is_surface_configured: bool,
     window: Arc<Window>,
-    clear_color: wgpu::Color,
     render_pipeline: wgpu::RenderPipeline,
     // diffuse_texture: Texture,
-    camera: Camera,
+    camera: camera::Camera, // UPDATED!
+    projection: camera::Projection, // NEW!
+    camera_controller: camera::CameraController, 
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    camera_controller: CameraController,
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
-    frame_count: u32,
     depth_texture: texture::Texture,
     obj_model: Model,
     light_uniform: LightUniform,
     light_buffer: wgpu::Buffer,
     light_bind_group: wgpu::BindGroup,
     light_render_pipeline: wgpu::RenderPipeline,
+    mouse_pressed: bool,
 }
 
 impl State {
@@ -498,22 +392,12 @@ impl State {
 
         // Setup camera
 
-        let camera = Camera {
-            // position the camera 1 unit up and 2 units back
-            // +z is out of the screen
-            eye: (0.0, 1.0, 2.0).into(),
-            // have it look at the origin
-            target: (0.0, 0.0, 0.0).into(),
-            // which way is "up"
-            up: cgmath::Vector3::unit_y(),
-            aspect: config.width as f32 / config.height as f32,
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
-        };
+        let camera = camera::Camera::new((0.0, 5.0, 10.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let projection = camera::Projection::new(config.width, config.height, cgmath::Deg(45.0), 0.1, 100.0);
+        let camera_controller = camera::CameraController::new(4.0, 0.4);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        camera_uniform.update_view_proj(&camera, &projection);
 
         let camera_buffer = device.create_buffer_init(
             &wgpu::util::BufferInitDescriptor {
@@ -549,8 +433,6 @@ impl State {
             ],
             label: Some("camera_bind_group"),
         });
-
-        let camera_controller = CameraController::new(0.2);
 
         // Light setup
 
@@ -645,29 +527,24 @@ impl State {
             config,
             is_surface_configured: false,
             window,
-            clear_color: wgpu::Color {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
             render_pipeline,
             // num_vertices,
             // diffuse_texture,
             camera,
+            camera_controller,
+            projection,
             camera_buffer,
             camera_bind_group,
             camera_uniform,
-            camera_controller,
             instances,
             instance_buffer,
-            frame_count: 0,
             depth_texture,
             obj_model,
             light_uniform,
             light_buffer,
             light_bind_group,
-            light_render_pipeline
+            light_render_pipeline,
+            mouse_pressed: false
         })
     }
 
@@ -675,6 +552,7 @@ impl State {
         if width > 0 && height > 0 {
             self.config.width = width;
             self.config.height = height;
+            self.projection.resize(width, height);
             self.surface.configure(&self.device, &self.config);
             self.depth_texture = texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
             self.is_surface_configured = true;
@@ -682,48 +560,54 @@ impl State {
         }
     }
 
-    pub fn handle_mouse_moved(&mut self, x: f64, y: f64) {
-        // x and y are in physical pixels; convert to normalized [0.0, 1.0]
-        let size = self.window.inner_size();
-        let w = size.width.max(1) as f64;
-        let h = size.height.max(1) as f64;
-        let nx = x / w;
-        let ny = y / h;
-        self.clear_color.b = nx;
-        self.clear_color.g = ny;
+    pub fn window(&self) -> &Window {
+        &self.window
     }
 
-    pub fn handle_key(&mut self, event_loop: &ActiveEventLoop, code: KeyCode, is_pressed: bool) {
-        match (code, is_pressed) {
-            (KeyCode::Escape, true) => event_loop.exit(),
-            _ => {
-               self.camera_controller.handle_key(code, is_pressed);
-            }
+    pub fn handle_mouse_motion(&mut self, delta_x: f64, delta_y: f64) {
+        if self.mouse_pressed {
+            self.camera_controller.handle_mouse(delta_x, delta_y);
         }
     }
 
-    pub fn update(&mut self) {
-        self.frame_count += 1;
-        self.camera_controller.update_camera(&mut self.camera);
-        self.camera_uniform.update_view_proj(&self.camera);
+    pub fn input(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => self.camera_controller.process_keyboard(*key, *state),
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.camera_controller.handle_mouse_scroll(delta);
+                true
+            }
+            WindowEvent::MouseInput {
+                button: MouseButton::Left,
+                state,
+                ..
+            } => {
+                self.mouse_pressed = *state == ElementState::Pressed;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn update(&mut self, dt: std::time::Duration) {
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.camera_uniform.update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(&self.camera_buffer, 0, bytemuck::cast_slice(&[self.camera_uniform]));
 
         let old_position: cgmath::Vector3<_> = self.light_uniform.position.into();
         self.light_uniform.position =
-            (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(1.0))
+            (cgmath::Quaternion::from_axis_angle((0.0, 1.0, 0.0).into(), cgmath::Deg(60.0 * dt.as_secs_f32()))
                 * old_position)
                 .into();
         self.queue.write_buffer(&self.light_buffer, 0, bytemuck::cast_slice(&[self.light_uniform]));
-
-        // for (i, instance) in self.instances.iter_mut().enumerate() {
-        //     // ensure floating point division (was doing integer division -> mostly zeros)
-        //     let t = i as f32 + self.frame_count as f32 / 100.0;
-        //     instance.position.y = f32::sin(t) / 10.0;
-        //     instance.rotation = cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y(), cgmath::Rad(f32::sin(t) / 2.0))
-        // }
-
-        // let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        // self.queue.write_buffer(&self.instance_buffer, 0, bytemuck::cast_slice(&instance_data));
     }
     
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -782,7 +666,14 @@ impl State {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
+                        load: wgpu::LoadOp::Clear(
+                            wgpu::Color {
+                                r: 0.5,
+                                g: 0.5,
+                                b: 1.0,
+                                a: 1.0,
+                            }
+                        ),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
