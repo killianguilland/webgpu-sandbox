@@ -162,6 +162,7 @@ fn create_render_pipeline(
     color_format: wgpu::TextureFormat,
     depth_format: Option<wgpu::TextureFormat>,
     vertex_layouts: &[wgpu::VertexBufferLayout],
+    topology: wgpu::PrimitiveTopology,
     shader: wgpu::ShaderModuleDescriptor,
 ) -> wgpu::RenderPipeline {
     let shader = device.create_shader_module(shader);
@@ -189,7 +190,7 @@ fn create_render_pipeline(
             compilation_options: Default::default(),
         }),
         primitive: wgpu::PrimitiveState {
-            topology: wgpu::PrimitiveTopology::TriangleList,
+            topology: topology,
             strip_index_format: None,
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
@@ -202,8 +203,8 @@ fn create_render_pipeline(
         },
         depth_stencil: depth_format.map(|format| wgpu::DepthStencilState {
             format,
-            depth_write_enabled: true,
-            depth_compare: wgpu::CompareFunction::Less,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         }),
@@ -255,12 +256,12 @@ impl State {
         
         // The instance is a handle to our GPU
         // BackendBit::PRIMARY => Vulkan + Metal + DX12 + Browser WebGPU
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::PRIMARY,
             flags: Default::default(),
             memory_budget_thresholds: Default::default(),
             backend_options: Default::default(),
-            //display: None,
+            display: None,
         });
         
         let surface = instance.create_surface(window.clone()).unwrap();
@@ -481,7 +482,7 @@ impl State {
 
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
-            bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout, &light_bind_group_layout],
+            bind_group_layouts: &[Some(&texture_bind_group_layout), Some(&camera_bind_group_layout), Some(&light_bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -496,6 +497,7 @@ impl State {
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc(), InstanceRaw::desc()],
+                wgpu::PrimitiveTopology::TriangleList,
                 shader,
             )
         };
@@ -503,7 +505,7 @@ impl State {
         let light_render_pipeline = {
             let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Light Pipeline Layout"),
-                bind_group_layouts: &[&camera_bind_group_layout, &light_bind_group_layout],
+                bind_group_layouts: &[Some(&camera_bind_group_layout), Some(&light_bind_group_layout)],
                 immediate_size: 0,
             });
             let shader = wgpu::ShaderModuleDescriptor {
@@ -516,6 +518,7 @@ impl State {
                 config.format,
                 Some(texture::Texture::DEPTH_FORMAT),
                 &[model::ModelVertex::desc()],
+                wgpu::PrimitiveTopology::TriangleList,
                 shader,
             )
         };
@@ -619,36 +622,25 @@ impl State {
         }
             
         let output = match self.surface.get_current_texture() {
-            // SUCCESS! We got the SurfaceTexture.
-            Ok(texture) => texture,
-                
-            Err(wgpu::SurfaceError::Outdated) => {
+            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
+            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
+                self.surface.configure(&self.device, &self.config);
+                surface_texture
+            }
+            wgpu::CurrentSurfaceTexture::Timeout
+            | wgpu::CurrentSurfaceTexture::Occluded
+            | wgpu::CurrentSurfaceTexture::Validation => {
+                // Skip this frame
+                return Ok(());
+            }
+            wgpu::CurrentSurfaceTexture::Outdated => {
                 self.surface.configure(&self.device, &self.config);
                 return Ok(());
             }
-            
-            Err(wgpu::SurfaceError::OutOfMemory) => {
-                // The system ran out of memory. This is fatal, so we log it.
-                log::error!("OutOfMemory");
-                // You might want to return an error here depending on your app's structure
-                return Ok(()); 
-            }
-            
-            Err(wgpu::SurfaceError::Timeout) => {
-                // A timeout happened. We just log a warning and skip the frame.
-                log::warn!("Surface timeout");
-                return Ok(());
-            }
-
-            Err(wgpu::SurfaceError::Lost) => {
+            wgpu::CurrentSurfaceTexture::Lost => {
                 // You could recreate the devices and all resources
                 // created with it here, but we'll just bail
                 anyhow::bail!("Lost device");
-            }
-
-            Err(wgpu::SurfaceError::Other) => {
-                // This case didnt exist in the tutorial, I chose to bail for now
-                anyhow::bail!("Other surface error");
             }
         };
 
@@ -692,13 +684,13 @@ impl State {
             
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
 
-            use crate::model::DrawLight; // NEW!
-            render_pass.set_pipeline(&self.light_render_pipeline); // NEW!
+            use crate::model::DrawLight;
+            render_pass.set_pipeline(&self.light_render_pipeline);
             render_pass.draw_light_model(
                 &self.obj_model,
                 &self.camera_bind_group,
                 &self.light_bind_group,
-            ); // NEW!
+            );
 
             use crate::model::DrawModel;
             render_pass.set_pipeline(&self.render_pipeline);
@@ -706,7 +698,7 @@ impl State {
                 &self.obj_model,
                 0..self.instances.len() as u32,
                 &self.camera_bind_group,
-                &self.light_bind_group, // NEW
+                &self.light_bind_group,
             );
         }
 
