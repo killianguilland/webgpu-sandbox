@@ -15,14 +15,14 @@ impl Texture {
         queue: &wgpu::Queue,
         rgba: [u8; 4],
         label: Option<&str>,
-        is_normal_map: bool,
+        is_linear: bool,
     ) -> Result<Self> {
         let img = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(1, 1, image::Rgba(rgba)));
-        Self::from_image(device, queue, &img, label, is_normal_map)
+        Self::from_image(device, queue, &img, label, is_linear)
     }
 
     pub fn fallback_diffuse(device: &wgpu::Device, queue: &wgpu::Queue, label: Option<&str>) -> Result<Self> {
-        Self::from_solid_rgba(device, queue, [255, 255, 255, 255], label, false)
+        Self::from_solid_rgba(device, queue, [0, 0, 0, 255], label, false)
     }
 
     pub fn fallback_normal(device: &wgpu::Device, queue: &wgpu::Queue, label: Option<&str>) -> Result<Self> {
@@ -34,10 +34,10 @@ impl Texture {
         queue: &wgpu::Queue,
         bytes: &[u8], 
         label: &str,
-        is_normal_map: bool,
+        is_linear: bool,
     ) -> Result<Self> {
         let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label), is_normal_map)
+        Self::from_image(device, queue, &img, Some(label), is_linear)
     }
 
     pub fn from_image(
@@ -45,9 +45,9 @@ impl Texture {
         queue: &wgpu::Queue,
         img: &image::DynamicImage,
         label: Option<&str>,
-        is_normal_map: bool,
+        is_linear: bool,
     ) -> Result<Self> {
-        let format = if is_normal_map {
+        let format = if is_linear {
             wgpu::TextureFormat::Rgba8Unorm
         } else {
             wgpu::TextureFormat::Rgba8UnormSrgb
