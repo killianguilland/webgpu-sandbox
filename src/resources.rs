@@ -38,163 +38,149 @@ pub async fn load_texture(
     texture::Texture::from_bytes(device, queue, &data, file_name, is_linear)
 }
 
+use asset_importer::{postprocess::PostProcessSteps, Importer, TextureType};
+
 pub async fn load_model(
     file_name: &str,
     device: &wgpu::Device,
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<model::Model> {
-    let obj_text = load_string(file_name).await?;
-    let obj_cursor = Cursor::new(obj_text);
-    let mut obj_reader = BufReader::new(obj_cursor);
+    
+    let model_path = std::path::Path::new(env!("OUT_DIR"))
+        .join("res")
+        .join(file_name);
+    
+    let path_str = model_path
+        .to_str()
+        .ok_or_else(|| anyhow::anyhow!("Le chemin du modèle est invalide"))?;
 
-    let (models, obj_materials) = tobj::load_obj_buf_async(
-        &mut obj_reader,
-        &tobj::LoadOptions {
-            triangulate: true,
-            single_index: true,
-            ..Default::default()
-        },
-        |p| async move {
-            let mat_text = load_string(&p).await.unwrap();
-            tobj::load_mtl_buf(&mut BufReader::new(Cursor::new(mat_text)))
-        },
-    )
-    .await?;
+    let scene = Importer::new()
+        .import_file_with(path_str, |b| {
+            b.with_post_process(
+                PostProcessSteps::TRIANGULATE
+                    | PostProcessSteps::CALC_TANGENT_SPACE
+                    | PostProcessSteps::JOIN_IDENTICAL_VERTICES
+                    | PostProcessSteps::FLIP_UVS,
+            )
+        })
+        .map_err(|e| anyhow::anyhow!("Assimp error during loading : {:?}", e))?;
 
+    // 3. Chargement des matériaux
     let mut materials = Vec::new();
-    for m in obj_materials? {
-        let diffuse_texture = if m.diffuse_texture.is_empty() {
-            texture::Texture::fallback_diffuse(device, queue, Some(&format!("{}::diffuse_fallback", m.name)))?
+    for m in scene.materials() {
+        println!("Found {} textures for material {}", m.texture_count(TextureType::Diffuse), m.name());
+        let name = m.name();
+
+        // Recherche de la texture diffuse
+        let diffuse_texture = if m.texture_count(TextureType::Diffuse) > 0 {
+            let tex = m.texture(TextureType::Diffuse, 0).unwrap();
+            // tex.file contient le chemin de la texture (ex: "textures/diffuse.png")
+            // Ton helper load_texture va automatiquement le chercher dans "OUT_DIR/res/" !
+            println!("Tex path : {}", &tex.path);
+            load_texture(&tex.path, false, device, queue).await?
         } else {
-            load_texture(&m.diffuse_texture, false, device, queue).await?
+            texture::Texture::fallback_diffuse(device, queue, Some(&format!("{}::diffuse_fallback", name)))?
         };
-        let normal_texture = if m.normal_texture.is_empty() {
-            texture::Texture::fallback_normal(device, queue, Some(&format!("{}::normal_fallback", m.name)))?
+
+        // Recherche de la texture de normales ou de bump
+        let normal_texture = if m.texture_count(TextureType::Normals) > 0 {
+            let tex = m.texture(TextureType::Normals, 0).unwrap();
+            load_texture(&tex.path, true, device, queue).await?
+        } else if m.texture_count(TextureType::Height) > 0 {
+            let tex = m.texture(TextureType::Height, 0).unwrap();
+            load_texture(&tex.path, true, device, queue).await?
         } else {
-            load_texture(&m.normal_texture, true, device, queue).await?
+            texture::Texture::fallback_normal(device, queue, Some(&format!("{}::normal_fallback", name)))?
         };
 
         materials.push(model::Material::new(
             device,
-            &m.name,
+            &name,
             diffuse_texture,
             normal_texture,
             layout,
         ));
     }
 
-    let meshes = models
-        .into_iter()
-        .map(|m| {
-            let mut vertices = (0..m.mesh.positions.len() / 3)
-            .map(|i| model::ModelVertex {
-                position: [
-                    m.mesh.positions[i * 3],
-                    m.mesh.positions[i * 3 + 1],
-                    m.mesh.positions[i * 3 + 2],
-                ],
-                tex_coords: [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]],
-                normal: [
-                    m.mesh.normals[i * 3],
-                    m.mesh.normals[i * 3 + 1],
-                    m.mesh.normals[i * 3 + 2],
-                ],
-                // We'll calculate these later
-                tangent: [0.0; 3],
-                bitangent: [0.0; 3],
-            })
-            .collect::<Vec<_>>();
+    // 4. Chargement et formatage de la géométrie (Meshes)
+    let mut meshes = Vec::new();
+    for m in scene.meshes() {
+        let positions = m.vertices();
+        let normals = m.normals();
+        let texcoords = m.texture_coords(0); // Premier canal UV
+        let texcoords = texcoords.as_ref();
+        let tangents = m.tangents();
+        let tangents = tangents.as_ref();
+        let bitangents = m.bitangents();
+        let bitangents = bitangents.as_ref();
 
+        let mut vertices = Vec::with_capacity(positions.len());
 
-            let indices = &m.mesh.indices;
-            let mut triangles_included = vec![0; vertices.len()];
+        for i in 0..positions.len() {
+            let pos = positions[i];
+            
+            // Assimp garantit ces tableaux s'ils ont été demandés, 
+            // mais c'est toujours bien de sécuriser si le fichier d'origine est corrompu.
+            let normal = if let Some(normals) = normals.as_ref() {
+                [normals[i].x, normals[i].y, normals[i].z]
+            } else {
+                [0.0, 0.0, 0.0]
+            };
+            let tc = if let Some(uvs) = texcoords {
+                [uvs[i].x, uvs[i].y] 
+            } else {
+                [0.0, 0.0]
+            };
 
-            // Calculate tangents and bitangets. We're going to
-            // use the triangles, so we need to loop through the
-            // indices in chunks of 3
-            for c in indices.chunks(3) {
-                let v0 = vertices[c[0] as usize];
-                let v1 = vertices[c[1] as usize];
-                let v2 = vertices[c[2] as usize];
+            let tangent = if let Some(t) = tangents {
+                [t[i].x, t[i].y, t[i].z]
+            } else {
+                [0.0, 0.0, 0.0]
+            };
 
-                let pos0: cgmath::Vector3<_> = v0.position.into();
-                let pos1: cgmath::Vector3<_> = v1.position.into();
-                let pos2: cgmath::Vector3<_> = v2.position.into();
+            let bitangent = if let Some(b) = bitangents {
+                [b[i].x, b[i].y, b[i].z]
+            } else {
+                [0.0, 0.0, 0.0]
+            };
 
-                let uv0: cgmath::Vector2<_> = v0.tex_coords.into();
-                let uv1: cgmath::Vector2<_> = v1.tex_coords.into();
-                let uv2: cgmath::Vector2<_> = v2.tex_coords.into();
-
-                // Calculate the edges of the triangle
-                let delta_pos1 = pos1 - pos0;
-                let delta_pos2 = pos2 - pos0;
-
-                // This will give us a direction to calculate the
-                // tangent and bitangent
-                let delta_uv1 = uv1 - uv0;
-                let delta_uv2 = uv2 - uv0;
-
-                // Solving the following system of equations will
-                // give us the tangent and bitangent.
-                //     delta_pos1 = delta_uv1.x * T + delta_u.y * B
-                //     delta_pos2 = delta_uv2.x * T + delta_uv2.y * B
-                // Luckily, the place I found this equation provided
-                // the solution!
-                let r = 1.0 / (delta_uv1.x * delta_uv2.y - delta_uv1.y * delta_uv2.x);
-                let tangent = (delta_pos1 * delta_uv2.y - delta_pos2 * delta_uv1.y) * r;
-                // We flip the bitangent to enable right-handed normal
-                // maps with wgpu texture coordinate system
-                let bitangent = (delta_pos2 * delta_uv1.x - delta_pos1 * delta_uv2.x) * -r;
-
-                // We'll use the same tangent/bitangent for each vertex in the triangle
-                vertices[c[0] as usize].tangent =
-                    (tangent + cgmath::Vector3::from(vertices[c[0] as usize].tangent)).into();
-                vertices[c[1] as usize].tangent =
-                    (tangent + cgmath::Vector3::from(vertices[c[1] as usize].tangent)).into();
-                vertices[c[2] as usize].tangent =
-                    (tangent + cgmath::Vector3::from(vertices[c[2] as usize].tangent)).into();
-                vertices[c[0] as usize].bitangent =
-                    (bitangent + cgmath::Vector3::from(vertices[c[0] as usize].bitangent)).into();
-                vertices[c[1] as usize].bitangent =
-                    (bitangent + cgmath::Vector3::from(vertices[c[1] as usize].bitangent)).into();
-                vertices[c[2] as usize].bitangent =
-                    (bitangent + cgmath::Vector3::from(vertices[c[2] as usize].bitangent)).into();
-
-                // Used to average the tangents/bitangents
-                triangles_included[c[0] as usize] += 1;
-                triangles_included[c[1] as usize] += 1;
-                triangles_included[c[2] as usize] += 1;
-            }
-
-            // Average the tangents/bitangents
-            for (i, n) in triangles_included.into_iter().enumerate() {
-                let denom = 1.0 / n as f32;
-                let v = &mut vertices[i];
-                v.tangent = (cgmath::Vector3::from(v.tangent) * denom).into();
-                v.bitangent = (cgmath::Vector3::from(v.bitangent) * denom).into();
-            }
-
-            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("{:?} Vertex Buffer", file_name)),
-                contents: bytemuck::cast_slice(&vertices),
-                usage: wgpu::BufferUsages::VERTEX,
+            vertices.push(model::ModelVertex {
+                position: [pos.x, pos.y, pos.z],
+                tex_coords: tc,
+                normal,
+                tangent,
+                bitangent,
             });
-            let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some(&format!("{:?} Index Buffer", file_name)),
-                contents: bytemuck::cast_slice(&m.mesh.indices),
-                usage: wgpu::BufferUsages::INDEX,
-            });
+        }
 
-            model::Mesh {
-                name: file_name.to_string(),
-                vertex_buffer,
-                index_buffer,
-                num_elements: m.mesh.indices.len() as u32,
-                material: m.mesh.material_id.unwrap_or(0),
-            }
-        })
-        .collect::<Vec<_>>();
+        let mut indices = Vec::new();
+        for face in m.faces() {
+            indices.extend_from_slice(&face.indices());
+        }
+
+        let mesh_name = m.name();
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{} Vertex Buffer", mesh_name)),
+            contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{} Index Buffer", mesh_name)),
+            contents: bytemuck::cast_slice(&indices),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+
+        meshes.push(model::Mesh {
+            name: mesh_name,
+            vertex_buffer,
+            index_buffer,
+            num_elements: indices.len() as u32,
+            material: m.material_index() as usize,
+        });
+    }
 
     Ok(model::Model { meshes, materials })
 }

@@ -396,7 +396,7 @@ impl State {
         // Model setup
 
         let obj_model =
-            resources::load_model("dae_-_bilora_bella_46_camera_-_game_ready_asset.obj", &device, &queue, &texture_bind_group_layout)
+            resources::load_model("scene.gltf", &device, &queue, &texture_bind_group_layout)
                 .await
                 .unwrap();
 
