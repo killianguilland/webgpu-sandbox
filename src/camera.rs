@@ -1,9 +1,10 @@
+use crate::input::Input;
 use cgmath::*;
-use winit::event::*;
-use winit::dpi::PhysicalPosition;
-use winit::keyboard::KeyCode;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
+use winit::dpi::PhysicalPosition;
+use winit::event::MouseButton;
+use winit::keyboard::KeyCode;
 
 #[rustfmt::skip]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::from_cols(
@@ -30,13 +31,7 @@ pub struct Projection {
 }
 
 impl Projection {
-    pub fn new<F: Into<Rad<f32>>>(
-        width: u32,
-        height: u32,
-        fovy: F,
-        znear: f32,
-        zfar: f32,
-    ) -> Self {
+    pub fn new<F: Into<Rad<f32>>>(width: u32, height: u32, fovy: F, znear: f32, zfar: f32) -> Self {
         Self {
             aspect: width as f32 / height as f32,
             fovy: fovy.into(),
@@ -77,11 +72,7 @@ impl Camera {
 
         Matrix4::look_to_rh(
             self.position,
-            Vector3::new(
-                cos_pitch * cos_yaw,
-                sin_pitch,
-                cos_pitch * sin_yaw
-            ).normalize(),
+            Vector3::new(cos_pitch * cos_yaw, sin_pitch, cos_pitch * sin_yaw).normalize(),
             Vector3::unit_y(),
         )
     }
@@ -119,55 +110,51 @@ impl CameraController {
         }
     }
 
-    pub fn process_keyboard(&mut self, key: KeyCode, state: ElementState) -> bool{
-        let amount = if state == ElementState::Pressed { 1.0 } else { 0.0 };
-        match key {
-            KeyCode::KeyW | KeyCode::ArrowUp => {
-                self.amount_forward = amount;
-                true
-            }
-            KeyCode::KeyS | KeyCode::ArrowDown => {
-                self.amount_backward = amount;
-                true
-            }
-        KeyCode::KeyA | KeyCode::ArrowLeft => {
-                self.amount_left = amount;
-                true
-            }
-            KeyCode::KeyD | KeyCode::ArrowRight => {
-                self.amount_right = amount;
-                true
-            }
-            KeyCode::Space => {
-                self.amount_up = amount;
-                true
-            }
-            KeyCode::ShiftLeft => {
-                self.amount_down = amount;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    pub fn handle_mouse(&mut self, mouse_dx: f64, mouse_dy: f64) {
-        self.rotate_horizontal = mouse_dx as f32;
-        self.rotate_vertical = mouse_dy as f32;
-    }
-
-    pub fn handle_mouse_scroll(&mut self, delta: &MouseScrollDelta) {
-        self.scroll = -match delta {
-            // I'm assuming a line is about 100 pixels
-            MouseScrollDelta::LineDelta(_, scroll) => scroll * 100.0,
-            MouseScrollDelta::PixelDelta(PhysicalPosition {
-                y: scroll,
-                ..
-            }) => *scroll as f32,
-        };
-    }
-
-    pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
+    pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration, input: &mut Input) {
         let dt = dt.as_secs_f32();
+
+        self.amount_forward =
+            if input.is_key_pressed(KeyCode::KeyW) || input.is_key_pressed(KeyCode::ArrowUp) {
+                1.0
+            } else {
+                0.0
+            };
+        self.amount_backward =
+            if input.is_key_pressed(KeyCode::KeyS) || input.is_key_pressed(KeyCode::ArrowDown) {
+                1.0
+            } else {
+                0.0
+            };
+        self.amount_left =
+            if input.is_key_pressed(KeyCode::KeyA) || input.is_key_pressed(KeyCode::ArrowLeft) {
+                1.0
+            } else {
+                0.0
+            };
+        self.amount_right =
+            if input.is_key_pressed(KeyCode::KeyD) || input.is_key_pressed(KeyCode::ArrowRight) {
+                1.0
+            } else {
+                0.0
+            };
+        self.amount_up = if input.is_key_pressed(KeyCode::Space) {
+            1.0
+        } else {
+            0.0
+        };
+        self.amount_down = if input.is_key_pressed(KeyCode::ShiftLeft) {
+            1.0
+        } else {
+            0.0
+        };
+
+        let (dx, dy) = input.get_mouse_delta();
+        if input.is_mouse_button_pressed(MouseButton::Left) {
+            self.rotate_horizontal = dx as f32;
+            self.rotate_vertical = dy as f32;
+        }
+
+        self.scroll = input.get_scroll_delta() * 100.0;
 
         // Move forward/backward and left/right
         let (yaw_sin, yaw_cos) = camera.yaw.0.sin_cos();
@@ -177,25 +164,19 @@ impl CameraController {
         camera.position += right * (self.amount_right - self.amount_left) * self.speed * dt;
 
         // Move in/out (aka. "zoom")
-        // Note: this isn't an actual zoom. The camera's position
-        // changes when zooming. I've added this to make it easier
-        // to get closer to an object you want to focus on.
         let (pitch_sin, pitch_cos) = camera.pitch.0.sin_cos();
-        let scrollward = Vector3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
+        let scrollward =
+            Vector3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
         camera.position += scrollward * self.scroll * self.speed * self.sensitivity * dt;
         self.scroll = 0.0;
 
-        // Move up/down. Since we don't use roll, we can just
-        // modify the y coordinate directly.
+        // Move up/down.
         camera.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
 
         // Rotate
         camera.yaw += Rad(self.rotate_horizontal) * self.sensitivity * dt;
         camera.pitch += Rad(-self.rotate_vertical) * self.sensitivity * dt;
 
-        // If process_mouse isn't called every frame, these values
-        // will not get set to zero, and the camera will rotate
-        // when moving in a non-cardinal direction.
         self.rotate_horizontal = 0.0;
         self.rotate_vertical = 0.0;
 

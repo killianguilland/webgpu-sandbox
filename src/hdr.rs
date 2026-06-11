@@ -1,9 +1,10 @@
 use wgpu::Operations;
 
-use crate::{state::create_render_pipeline, texture};
+use crate::renderer::create_render_pipeline;
+use crate::texture;
 
 /// Owns the render texture and controls tonemapping
-pub struct HdrPipeline {
+pub struct Hdr {
     pipeline: wgpu::RenderPipeline,
     bind_group: wgpu::BindGroup,
     texture: texture::Texture,
@@ -13,7 +14,7 @@ pub struct HdrPipeline {
     layout: wgpu::BindGroupLayout,
 }
 
-impl HdrPipeline {
+impl Hdr {
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         let width = config.width;
         let height = config.height;
@@ -70,7 +71,7 @@ impl HdrPipeline {
         });
 
         // We'll cover the shader next
-        let shader = wgpu::include_wgsl!("hdr.wgsl");
+        let shader = wgpu::include_wgsl!("shaders/hdr.wgsl");
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[Some(&layout)],

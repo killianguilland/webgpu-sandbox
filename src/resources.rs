@@ -38,7 +38,7 @@ pub async fn load_texture(
     texture::Texture::from_bytes(device, queue, &data, file_name, is_linear)
 }
 
-use asset_importer::{postprocess::PostProcessSteps, Importer, TextureType};
+use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps};
 
 pub async fn load_model(
     file_name: &str,
@@ -46,11 +46,10 @@ pub async fn load_model(
     queue: &wgpu::Queue,
     layout: &wgpu::BindGroupLayout,
 ) -> anyhow::Result<model::Model> {
-    
     let model_path = std::path::Path::new(env!("OUT_DIR"))
         .join("res")
         .join(file_name);
-    
+
     let path_str = model_path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("Le chemin du modèle est invalide"))?;
@@ -69,7 +68,11 @@ pub async fn load_model(
     // 3. Chargement des matériaux
     let mut materials = Vec::new();
     for m in scene.materials() {
-        println!("Found {} textures for material {}", m.texture_count(TextureType::Diffuse), m.name());
+        println!(
+            "Found {} textures for material {}",
+            m.texture_count(TextureType::Diffuse),
+            m.name()
+        );
         let name = m.name();
 
         // Recherche de la texture diffuse
@@ -80,7 +83,11 @@ pub async fn load_model(
             println!("Tex path : {}", &tex.path);
             load_texture(&tex.path, false, device, queue).await?
         } else {
-            texture::Texture::fallback_diffuse(device, queue, Some(&format!("{}::diffuse_fallback", name)))?
+            texture::Texture::fallback_diffuse(
+                device,
+                queue,
+                Some(&format!("{}::diffuse_fallback", name)),
+            )?
         };
 
         // Recherche de la texture de normales ou de bump
@@ -91,7 +98,11 @@ pub async fn load_model(
             let tex = m.texture(TextureType::Height, 0).unwrap();
             load_texture(&tex.path, true, device, queue).await?
         } else {
-            texture::Texture::fallback_normal(device, queue, Some(&format!("{}::normal_fallback", name)))?
+            texture::Texture::fallback_normal(
+                device,
+                queue,
+                Some(&format!("{}::normal_fallback", name)),
+            )?
         };
 
         materials.push(model::Material::new(
@@ -119,8 +130,8 @@ pub async fn load_model(
 
         for i in 0..positions.len() {
             let pos = positions[i];
-            
-            // Assimp garantit ces tableaux s'ils ont été demandés, 
+
+            // Assimp garantit ces tableaux s'ils ont été demandés,
             // mais c'est toujours bien de sécuriser si le fichier d'origine est corrompu.
             let normal = if let Some(normals) = normals.as_ref() {
                 [normals[i].x, normals[i].y, normals[i].z]
@@ -128,7 +139,7 @@ pub async fn load_model(
                 [0.0, 0.0, 0.0]
             };
             let tc = if let Some(uvs) = texcoords {
-                [uvs[i].x, uvs[i].y] 
+                [uvs[i].x, uvs[i].y]
             } else {
                 [0.0, 0.0]
             };
@@ -166,7 +177,7 @@ pub async fn load_model(
             contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        
+
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some(&format!("{} Index Buffer", mesh_name)),
             contents: bytemuck::cast_slice(&indices),
@@ -193,7 +204,8 @@ pub struct HdrLoader {
 
 impl HdrLoader {
     pub fn new(device: &wgpu::Device) -> Self {
-        let module = device.create_shader_module(wgpu::include_wgsl!("equirectangular.wgsl"));
+        let module =
+            device.create_shader_module(wgpu::include_wgsl!("shaders/equirectangular.wgsl"));
         let texture_format = wgpu::TextureFormat::Rgba32Float;
         let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("HdrLoader::equirect_layout"),
@@ -254,7 +266,7 @@ impl HdrLoader {
     ) -> anyhow::Result<texture::CubeTexture> {
         let hdr_decoder = HdrDecoder::new(Cursor::new(data))?;
         let meta = hdr_decoder.metadata();
-        
+
         let pixels = {
             let mut pixels = vec![[0.0, 0.0, 0.0, 0.0]; meta.width as usize * meta.height as usize];
             hdr_decoder.read_image_transform(
@@ -301,8 +313,7 @@ impl HdrLoader {
             1,
             // We are going to write to `dst` texture so we
             // need to use a `STORAGE_BINDING`.
-            wgpu::TextureUsages::STORAGE_BINDING
-                | wgpu::TextureUsages::TEXTURE_BINDING,
+            wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             wgpu::FilterMode::Nearest,
             label,
         );
@@ -334,7 +345,10 @@ impl HdrLoader {
         });
 
         let mut encoder = device.create_command_encoder(&Default::default());
-        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { label, timestamp_writes: None });
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label,
+            timestamp_writes: None,
+        });
 
         let num_workgroups = (dst_size + 15) / 16;
         pass.set_pipeline(&self.equirect_to_cubemap);
