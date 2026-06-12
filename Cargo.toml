@@ -23,6 +23,9 @@ pollster = "0.3"
 bytemuck = { version = "1.24", features = [ "derive" ] }
 cgmath = "0.18"
 asset-importer = { version = "0.7", default-features = false, features = ["system"] }
+egui = "0.34.3"
+egui-wgpu = "0.34.3"
+egui-winit = "0.34.3"
 
 [dependencies.image]
 version = "0.24"
