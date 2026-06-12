@@ -1,6 +1,5 @@
 use crate::camera::Camera;
 use crate::input::Input;
-use crate::model::Model;
 use cgmath::{Quaternion, Vector3};
 use std::time::Duration;
 

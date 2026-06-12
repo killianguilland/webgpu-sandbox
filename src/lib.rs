@@ -9,6 +9,7 @@ pub mod renderer;
 mod resources;
 pub mod scenes;
 mod texture;
+mod ui;
 
 use crate::app::App;
 

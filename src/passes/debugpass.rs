@@ -1,8 +1,7 @@
 use crate::context::GraphicsContext;
-use crate::model::Vertex;
-use crate::renderer::{RenderPass, Renderer, create_render_pipeline};
+use crate::renderer::{Renderer, create_render_pipeline};
 use crate::scenes::Scene;
-use crate::{model, texture};
+use crate::texture;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -158,7 +157,6 @@ impl crate::renderer::RenderPass for DebugPass {
             return;
         }
 
-        // 1. Collect transforms into InstanceRaw
         let mut debug_instances = Vec::new();
         for node in debug_nodes {
             let transform = node.get_transform();
@@ -169,7 +167,6 @@ impl crate::renderer::RenderPass for DebugPass {
             });
         }
 
-        // 2. Create instance buffer
         use wgpu::util::DeviceExt;
         let instance_bytes = bytemuck::cast_slice(&debug_instances);
         let instance_buffer =
@@ -181,7 +178,6 @@ impl crate::renderer::RenderPass for DebugPass {
                     usage: wgpu::BufferUsages::VERTEX,
                 });
 
-        // 3. Draw!
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &renderer.camera_bind_group, &[]);
         render_pass.set_bind_group(1, &renderer.light_bind_group, &[]);

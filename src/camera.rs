@@ -2,7 +2,6 @@ use crate::input::Input;
 use cgmath::*;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
-use winit::dpi::PhysicalPosition;
 use winit::event::MouseButton;
 use winit::keyboard::KeyCode;
 

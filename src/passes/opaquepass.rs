@@ -52,7 +52,7 @@ impl RenderPass for OpaquePass {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
-        scene: &dyn Scene,
+        _scene: &dyn Scene,
         _context: &GraphicsContext,
         renderer: &Renderer,
     ) {

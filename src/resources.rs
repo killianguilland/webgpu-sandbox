@@ -1,21 +1,10 @@
-use std::io::{BufReader, Cursor};
+use std::io::Cursor;
 
 use wgpu::util::DeviceExt;
 
 use image::codecs::hdr::HdrDecoder;
 
 use crate::{model, texture};
-
-pub async fn load_string(file_name: &str) -> anyhow::Result<String> {
-    let txt = {
-        let path = std::path::Path::new(env!("OUT_DIR"))
-            .join("res")
-            .join(file_name);
-        std::fs::read_to_string(path)?
-    };
-
-    Ok(txt)
-}
 
 pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
     let data = {
@@ -68,11 +57,6 @@ pub async fn load_model(
     // 3. Chargement des matériaux
     let mut materials = Vec::new();
     for m in scene.materials() {
-        println!(
-            "Found {} textures for material {}",
-            m.texture_count(TextureType::Diffuse),
-            m.name()
-        );
         let name = m.name();
 
         // Recherche de la texture diffuse
@@ -80,7 +64,6 @@ pub async fn load_model(
             let tex = m.texture(TextureType::Diffuse, 0).unwrap();
             // tex.file contient le chemin de la texture (ex: "textures/diffuse.png")
             // Ton helper load_texture va automatiquement le chercher dans "OUT_DIR/res/" !
-            println!("Tex path : {}", &tex.path);
             load_texture(&tex.path, false, device, queue).await?
         } else {
             texture::Texture::fallback_diffuse(

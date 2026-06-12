@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use wgpu::util::DeviceExt;
 
 use crate::camera::{Camera, Projection};

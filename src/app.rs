@@ -25,6 +25,8 @@ pub struct EngineState {
     pub input: Input,
     pub hdr: Hdr,
     pub depth_texture: texture::Texture,
+    pub ui: crate::ui::UiState,
+    pub app_ui: crate::ui::AppUi,
 }
 
 impl EngineState {
@@ -33,7 +35,11 @@ impl EngineState {
 
         let mut renderer = Renderer::new(&context);
 
+        let ui = crate::ui::UiState::new(&context);
+        let app_ui = crate::ui::AppUi::new();
+
         let hdr = Hdr::new(&context.device, &context.config);
+
         let depth_texture = texture::Texture::create_depth_texture(
             &context.device,
             &context.config,
@@ -75,6 +81,8 @@ impl EngineState {
             input: Input::new(),
             hdr,
             depth_texture,
+            ui,
+            app_ui,
         })
     }
 
@@ -142,6 +150,11 @@ impl EngineState {
 
         self.hdr.process(&mut encoder, &view);
 
+        let models = &self.renderer.models;
+        self.ui.draw(&self.context, &mut encoder, &view, |ui| {
+            self.app_ui.show(ui, self.scene.as_ref(), models);
+        });
+
         self.context.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
@@ -191,6 +204,15 @@ impl ApplicationHandler<EngineState> for App {
             None => return,
         };
         if window_id != state.context.window.id() {
+            return;
+        }
+
+        let response = state
+            .ui
+            .winit_state
+            .on_window_event(&state.context.window, &event);
+
+        if response.consumed {
             return;
         }
 

@@ -1,7 +1,5 @@
 use crate::camera::{Camera, CameraController};
 use crate::input::Input;
-use crate::model::Model;
-use crate::resources;
 use crate::scenes::{Instance, Light, RenderDebug, Scene};
 use cgmath::{Quaternion, Rotation3, Vector3, Zero};
 use std::time::Duration;
@@ -16,12 +14,12 @@ pub struct DefaultScene {
 
 impl DefaultScene {
     pub fn new() -> Self {
-        let camera = Camera::new((0.0, 2.0, 5.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let camera = Camera::new((0.0, 1.0, 2.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
 
         let camera_controller = CameraController::new(4.0, 0.4);
 
         let instances = vec![Instance {
-            model_name: "scene.gltf".to_string(),
+            model_name: "models/OBJ/camera/camera.obj".to_string(),
             position: Vector3::zero(),
             rotation: Quaternion::from_axis_angle(Vector3::unit_z(), cgmath::Deg(0.0)),
         }];
@@ -79,7 +77,7 @@ impl Scene for DefaultScene {
     }
 
     fn required_models(&self) -> Vec<&str> {
-        vec!["scene.gltf"]
+        vec!["models/OBJ/camera/camera.obj"]
     }
 
     fn instances(&self) -> &[Instance] {
