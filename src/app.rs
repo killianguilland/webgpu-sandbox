@@ -8,16 +8,16 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::context::GraphicsContext;
-use crate::depth::Depth;
-use crate::hdr::Hdr;
+use crate::gbuffer;
 use crate::input::Input;
-use crate::passes::{ClearPass, DebugPass, OpaquePass, SkyboxPass};
+use crate::passes::{ClearPass, GeometryPass, GizmoPass, SkyboxPass};
+use crate::postprocess::hdr::Hdr;
+use crate::postprocess::visualizer::Visualizer;
 use crate::renderer::Renderer;
 use crate::resources;
 use crate::scenes::Scene;
 use crate::scenes::default_scene::DefaultScene;
-use crate::texture;
+use crate::{context::GraphicsContext, gbuffer::GBuffer};
 
 pub struct EngineState {
     pub context: GraphicsContext,
@@ -26,8 +26,8 @@ pub struct EngineState {
     pub resources: resources::ResourceManager,
     pub input: Input,
     pub hdr_visualizer: Hdr,
-    pub depth_visualizer: Depth,
-    pub depth_texture: texture::Texture,
+    pub visualizer: Visualizer,
+    pub gbuffer: GBuffer,
     pub ui: crate::ui::UiState,
     pub app_ui: crate::ui::AppUi,
     pub settings: crate::settings::RenderSettings,
@@ -45,14 +45,9 @@ impl EngineState {
 
         let hdr = Hdr::new(&context.device, &context.config);
 
-        let depth_texture = texture::Texture::create_depth_texture(
-            &context.device,
-            &context.config,
-            "depth_texture",
-        );
+        let gbuffer = gbuffer::GBuffer::new(&context.device, &context.config);
 
-        let depth_visualizer =
-            crate::depth::Depth::new(&context.device, &context.config, &depth_texture);
+        let visualizer = Visualizer::new(&context.device, context.config.format, &gbuffer);
 
         let scene = DefaultScene::new();
 
@@ -70,10 +65,14 @@ impl EngineState {
         let mut settings = crate::settings::RenderSettings::new();
         renderer.add_pass(Box::new(ClearPass));
         settings.pass_states.insert("Clear".to_string(), true);
-        renderer.add_pass(Box::new(DebugPass::new(&context, &renderer, hdr.format())));
-        settings.pass_states.insert("Debug".to_string(), true);
-        renderer.add_pass(Box::new(OpaquePass::new(&context, &renderer, hdr.format())));
-        settings.pass_states.insert("Opaque".to_string(), true);
+        renderer.add_pass(Box::new(GizmoPass::new(&context, &renderer, hdr.format())));
+        settings.pass_states.insert("Gizmo".to_string(), true);
+        renderer.add_pass(Box::new(GeometryPass::new(
+            &context,
+            &renderer,
+            hdr.format(),
+        )));
+        settings.pass_states.insert("Geometry".to_string(), true);
 
         resources
             .load_hdr_environment(
@@ -95,8 +94,8 @@ impl EngineState {
             resources,
             input: Input::new(),
             hdr_visualizer: hdr,
-            depth_visualizer: depth_visualizer,
-            depth_texture,
+            visualizer,
+            gbuffer,
             ui,
             app_ui,
             settings,
@@ -108,13 +107,8 @@ impl EngineState {
         self.renderer.resize(width, height);
         self.hdr_visualizer
             .resize(&self.context.device, width, height);
-        self.depth_texture = texture::Texture::create_depth_texture(
-            &self.context.device,
-            &self.context.config,
-            "depth_texture",
-        );
-        self.depth_visualizer
-            .resize(&self.context.device, &self.depth_texture);
+        self.gbuffer
+            .resize(&self.context.device, &self.context.config);
     }
 
     pub fn update(&mut self, dt: std::time::Duration) {
@@ -163,7 +157,7 @@ impl EngineState {
         self.renderer.render(
             &self.context,
             &self.hdr_visualizer.view(),
-            &self.depth_texture.view,
+            &self.gbuffer,
             self.scene.as_ref(),
             &self.resources,
             &mut encoder,
@@ -172,8 +166,14 @@ impl EngineState {
 
         self.hdr_visualizer.process(&mut encoder, &view);
 
-        if self.settings.show_depthmap {
-            self.depth_visualizer.process(&mut encoder, &view);
+        if self.settings.debug_mode > 0 {
+            self.visualizer.process(
+                &mut encoder,
+                &view,
+                &self.gbuffer,
+                &self.context.queue,
+                self.settings.debug_mode - 1,
+            );
         } else {
             self.hdr_visualizer.process(&mut encoder, &view);
         }

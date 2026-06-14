@@ -65,6 +65,10 @@ pub struct Material {
     pub diffuse_texture: texture::Texture,
     #[allow(unused)]
     pub normal_texture: texture::Texture,
+    #[allow(unused)]
+    pub metalness_texture: texture::Texture,
+    #[allow(unused)]
+    pub roughness_texture: texture::Texture,
     pub bind_group: wgpu::BindGroup,
 }
 
@@ -74,6 +78,8 @@ impl Material {
         name: &str,
         diffuse_texture: texture::Texture,
         normal_texture: texture::Texture,
+        metalness_texture: texture::Texture,
+        roughness_texture: texture::Texture,
         layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -87,7 +93,6 @@ impl Material {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                 },
-                // NEW!
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(&normal_texture.view),
@@ -95,6 +100,22 @@ impl Material {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::Sampler(&normal_texture.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&metalness_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: wgpu::BindingResource::Sampler(&metalness_texture.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: wgpu::BindingResource::TextureView(&roughness_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: wgpu::BindingResource::Sampler(&roughness_texture.sampler),
                 },
             ],
             label: Some(name),
@@ -104,6 +125,8 @@ impl Material {
             name: String::from(name),
             diffuse_texture,
             normal_texture,
+            roughness_texture,
+            metalness_texture,
             bind_group,
         }
     }

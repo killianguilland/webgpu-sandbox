@@ -51,7 +51,7 @@ pub trait Scene {
     fn update(&mut self, dt: Duration, input: &mut Input);
     fn camera(&self) -> &Camera;
     fn required_models(&self) -> Vec<&str>;
-    fn debug_nodes(&self) -> Vec<&dyn RenderDebug> {
+    fn gizmo_nodes(&self) -> Vec<&dyn RenderDebug> {
         vec![]
     }
     fn instances(&self) -> &[Instance];

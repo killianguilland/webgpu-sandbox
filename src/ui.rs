@@ -132,7 +132,14 @@ impl AppUi {
             for (pass_name, is_enabled) in settings.pass_states.iter_mut() {
                 window_ui.checkbox(is_enabled, format!("{} pass", pass_name));
             }
-            window_ui.checkbox(&mut settings.show_depthmap, "Display depthmap");
+
+            window_ui.heading("G-Buffer visualizer");
+            window_ui.radio_value(&mut settings.debug_mode, 0, "None");
+            window_ui.radio_value(&mut settings.debug_mode, 1, "Albedo");
+            window_ui.radio_value(&mut settings.debug_mode, 2, "Normal");
+            window_ui.radio_value(&mut settings.debug_mode, 3, "PBR");
+            window_ui.radio_value(&mut settings.debug_mode, 4, "Depth");
+
             window_ui.heading("Models inspector");
             for model_name in models.keys() {
                 if window_ui.button(model_name).clicked() {

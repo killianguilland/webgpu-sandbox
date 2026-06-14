@@ -2,7 +2,6 @@ use wgpu::util::DeviceExt;
 
 use crate::camera::{Camera, Projection};
 use crate::context::GraphicsContext;
-use crate::model::Model;
 use crate::scenes::{Instance, Scene};
 use cgmath::Matrix;
 use std::collections::HashMap;
@@ -185,7 +184,7 @@ pub trait RenderPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        depth_view: &wgpu::TextureView,
+        gbuffer: &crate::gbuffer::GBuffer,
         scene: &dyn Scene,
         resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
@@ -323,6 +322,38 @@ impl Renderer {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 5,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 6,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 7,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
                 ],
                 label: Some("texture_bind_group_layout"),
             });
@@ -440,7 +471,7 @@ impl Renderer {
         &self,
         context: &GraphicsContext,
         view: &wgpu::TextureView,
-        depth_view: &wgpu::TextureView,
+        gbuffer: &crate::gbuffer::GBuffer,
         scene: &dyn Scene,
         resources: &crate::resources::ResourceManager,
         encoder: &mut wgpu::CommandEncoder,
@@ -453,7 +484,7 @@ impl Renderer {
                 }
             }
 
-            pass.render(encoder, view, depth_view, scene, resources, context, self);
+            pass.render(encoder, view, gbuffer, scene, resources, context, self);
         }
     }
 }

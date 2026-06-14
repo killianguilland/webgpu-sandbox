@@ -56,7 +56,7 @@ impl Scene for DefaultScene {
         }
     }
 
-    fn debug_nodes(&self) -> Vec<&dyn RenderDebug> {
+    fn gizmo_nodes(&self) -> Vec<&dyn RenderDebug> {
         let mut nodes: Vec<&dyn RenderDebug> = Vec::new();
 
         // Add all instances

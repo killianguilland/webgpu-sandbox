@@ -5,13 +5,13 @@ use crate::texture;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-pub struct DebugVertex {
+pub struct GizmoVertex {
     pub position: [f32; 3],
 }
-impl DebugVertex {
+impl GizmoVertex {
     pub fn desc() -> wgpu::VertexBufferLayout<'static> {
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<DebugVertex>() as wgpu::BufferAddress,
+            array_stride: std::mem::size_of::<GizmoVertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[wgpu::VertexAttribute {
                 offset: 0,
@@ -22,12 +22,12 @@ impl DebugVertex {
     }
 }
 
-pub struct DebugPass {
+pub struct GizmoPass {
     pub render_pipeline: wgpu::RenderPipeline,
     pub vertex_buffer: wgpu::Buffer,
 }
 
-impl DebugPass {
+impl GizmoPass {
     pub fn new(
         context: &GraphicsContext,
         renderer: &Renderer,
@@ -36,7 +36,7 @@ impl DebugPass {
         let layout = context
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Debug Pipeline Layout"),
+                label: Some("Gizmo Pipeline Layout"),
                 bind_group_layouts: &[
                     Some(&renderer.camera_bind_group_layout),
                     Some(&renderer.light_bind_group_layout),
@@ -44,15 +44,15 @@ impl DebugPass {
                 immediate_size: 0,
             });
         let shader = wgpu::ShaderModuleDescriptor {
-            label: Some("Debug Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/debug.wgsl").into()),
+            label: Some("Gizmo Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/gizmo.wgsl").into()),
         };
         let render_pipeline = create_render_pipeline(
             &context.device,
             &layout,
             hdr_format,
             Some(texture::Texture::DEPTH_FORMAT),
-            &[DebugVertex::desc(), crate::renderer::InstanceRaw::desc()],
+            &[GizmoVertex::desc(), crate::renderer::InstanceRaw::desc()],
             wgpu::PrimitiveTopology::LineList,
             shader,
         );
@@ -72,39 +72,39 @@ impl DebugPass {
         // 12 lines * 2 vertices each
         let vertices = [
             // Bottom
-            DebugVertex { position: v[0] },
-            DebugVertex { position: v[1] },
-            DebugVertex { position: v[1] },
-            DebugVertex { position: v[2] },
-            DebugVertex { position: v[2] },
-            DebugVertex { position: v[3] },
-            DebugVertex { position: v[3] },
-            DebugVertex { position: v[0] },
+            GizmoVertex { position: v[0] },
+            GizmoVertex { position: v[1] },
+            GizmoVertex { position: v[1] },
+            GizmoVertex { position: v[2] },
+            GizmoVertex { position: v[2] },
+            GizmoVertex { position: v[3] },
+            GizmoVertex { position: v[3] },
+            GizmoVertex { position: v[0] },
             // Top
-            DebugVertex { position: v[4] },
-            DebugVertex { position: v[5] },
-            DebugVertex { position: v[5] },
-            DebugVertex { position: v[6] },
-            DebugVertex { position: v[6] },
-            DebugVertex { position: v[7] },
-            DebugVertex { position: v[7] },
-            DebugVertex { position: v[4] },
+            GizmoVertex { position: v[4] },
+            GizmoVertex { position: v[5] },
+            GizmoVertex { position: v[5] },
+            GizmoVertex { position: v[6] },
+            GizmoVertex { position: v[6] },
+            GizmoVertex { position: v[7] },
+            GizmoVertex { position: v[7] },
+            GizmoVertex { position: v[4] },
             // Pillars
-            DebugVertex { position: v[0] },
-            DebugVertex { position: v[4] },
-            DebugVertex { position: v[1] },
-            DebugVertex { position: v[5] },
-            DebugVertex { position: v[2] },
-            DebugVertex { position: v[6] },
-            DebugVertex { position: v[3] },
-            DebugVertex { position: v[7] },
+            GizmoVertex { position: v[0] },
+            GizmoVertex { position: v[4] },
+            GizmoVertex { position: v[1] },
+            GizmoVertex { position: v[5] },
+            GizmoVertex { position: v[2] },
+            GizmoVertex { position: v[6] },
+            GizmoVertex { position: v[3] },
+            GizmoVertex { position: v[7] },
         ];
 
         use wgpu::util::DeviceExt;
         let vertex_buffer = context
             .device
             .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("Debug Cube Vertex Buffer"),
+                label: Some("Gizmo Cube Vertex Buffer"),
                 contents: bytemuck::cast_slice(&vertices),
                 usage: wgpu::BufferUsages::VERTEX,
             });
@@ -116,23 +116,23 @@ impl DebugPass {
     }
 }
 
-impl crate::renderer::RenderPass for DebugPass {
+impl crate::renderer::RenderPass for GizmoPass {
     fn name(&self) -> &str {
-        "Debug"
+        "Gizmo"
     }
 
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        depth_view: &wgpu::TextureView,
+        gbuffer: &crate::gbuffer::GBuffer,
         scene: &dyn Scene,
         _resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Debug Render Pass"),
+            label: Some("Gizmo Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
                 resolve_target: None,
@@ -143,7 +143,7 @@ impl crate::renderer::RenderPass for DebugPass {
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_view,
+                view: &gbuffer.depth.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
@@ -157,28 +157,28 @@ impl crate::renderer::RenderPass for DebugPass {
 
         render_pass.set_pipeline(&self.render_pipeline);
 
-        let debug_nodes = scene.debug_nodes();
-        if debug_nodes.is_empty() {
+        let gizmo_nodes = scene.gizmo_nodes();
+        if gizmo_nodes.is_empty() {
             return;
         }
 
-        let mut debug_instances = Vec::new();
-        for node in debug_nodes {
+        let mut gizmo_instances = Vec::new();
+        for node in gizmo_nodes {
             let transform = node.get_transform();
-            debug_instances.push(crate::renderer::InstanceRaw {
+            gizmo_instances.push(crate::renderer::InstanceRaw {
                 model: transform.into(),
-                // Normal matrix isn't used by our debug shader, so we just provide identity
+                // Normal matrix isn't used by our gizmo shader, so we just provide identity
                 normal: cgmath::Matrix3::from_scale(1.0).into(),
             });
         }
 
         use wgpu::util::DeviceExt;
-        let instance_bytes = bytemuck::cast_slice(&debug_instances);
+        let instance_bytes = bytemuck::cast_slice(&gizmo_instances);
         let instance_buffer =
             context
                 .device
                 .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("Debug Instance Buffer"),
+                    label: Some("Gizmo Instance Buffer"),
                     contents: instance_bytes,
                     usage: wgpu::BufferUsages::VERTEX,
                 });
@@ -191,6 +191,6 @@ impl crate::renderer::RenderPass for DebugPass {
         render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
 
         // 24 vertices for the wireframe cube, and 1 instance per debug node!
-        render_pass.draw(0..24, 0..debug_instances.len() as u32);
+        render_pass.draw(0..24, 0..gizmo_instances.len() as u32);
     }
 }

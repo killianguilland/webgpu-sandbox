@@ -1,11 +1,11 @@
 pub mod app;
 mod camera;
 pub mod context;
-mod depth;
-mod hdr;
+mod gbuffer;
 pub mod input;
 mod model;
 pub mod passes;
+pub mod postprocess;
 pub mod renderer;
 mod resources;
 pub mod scenes;

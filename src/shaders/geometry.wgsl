@@ -37,7 +37,6 @@ struct InstanceInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
-    // Updated!
     @location(1) world_position: vec3<f32>,
     @location(2) world_view_position: vec3<f32>,
     @location(3) world_light_position: vec3<f32>,
@@ -79,14 +78,14 @@ fn vs_main(
 
 // Fragment shader
 
-@group(0) @binding(0)
-var t_diffuse: texture_2d<f32>;
-@group(0)@binding(1)
-var s_diffuse: sampler;
-@group(0)@binding(2)
-var t_normal: texture_2d<f32>;
-@group(0) @binding(3)
-var s_normal: sampler;
+@group(0) @binding(0) var t_diffuse: texture_2d<f32>;
+@group(0)@binding(1) var s_diffuse: sampler;
+@group(0)@binding(2) var t_normal: texture_2d<f32>;
+@group(0) @binding(3) var s_normal: sampler;
+@group(0) @binding(4) var t_metallic: texture_2d<f32>;
+@group(0) @binding(5) var s_metallic: sampler;
+@group(0) @binding(6) var t_roughness: texture_2d<f32>;
+@group(0) @binding(7) var s_roughness: sampler;
 
 @group(3)
 @binding(0)
@@ -95,45 +94,50 @@ var env_map: texture_cube<f32>;
 @binding(1)
 var env_sampler: sampler;
 
-@fragment
-fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let object_color: vec4<f32> = textureSample(t_diffuse, s_diffuse, in.tex_coords);
-    let object_normal: vec4<f32> = textureSample(t_normal, s_normal, in.tex_coords);
+struct GBufferOutput {
+    @location(0) albedo: vec4<f32>,
+    @location(1) normal: vec4<f32>,
+    @location(2) pbr: vec2<f32>,
+};
 
-    // NEW!
-    // Adjust the tangent and bitangent using the Gramm-Schmidt process
-    // This makes sure that they are perpendicular to each other and the
-    // normal of the surface.
+@fragment
+fn fs_main(in: VertexOutput) -> GBufferOutput {
+    // ALBEDO
+    let albedo = textureSample(t_diffuse, s_diffuse, in.tex_coords);
+
+
+    // NORMAL
+    //let normal = vec4<f32>(normalize(in.world_normal), 1.0); // This is the triangle's normal (without the normal map texture)
+    
+    // Tangent space normal from the texture
+    // Color space [0, 1]
+    let object_normal = textureSample(t_normal, s_normal, in.tex_coords); 
+    
+    // Expand it from [0, 1] color space to [-1, 1] mathematical vector space
+    let tangent_normal = object_normal.xyz * 2.0 - 1.0;
+    
+    // 3. Build the TBN arrows
+    // We transform our three vectors into an orthogonal family of vectors (perpendicular)
     let world_tangent = normalize(in.world_tangent - dot(in.world_tangent, in.world_normal) * in.world_normal);
     let world_bitangent = cross(world_tangent, in.world_normal);
-
-    // Convert the normal sample to world space
+    
+    // Pack them into the rotation matrix
     let TBN = mat3x3(
         world_tangent,
         world_bitangent,
         in.world_normal,
     );
-    let tangent_normal = object_normal.xyz * 2.0 - 1.0;
-    let world_normal = TBN * tangent_normal;
+    
+    // Rotate the flat normal into 3D World Space!
+    let final_world_normal = normalize(TBN * tangent_normal);
+    
+    // Output our final normal to the G-Buffer
+    let normal_out = vec4<f32>(final_world_normal, 1.0);
+    
+    // PBR
+    let metallic = textureSample(t_metallic, s_metallic, in.tex_coords).b;
+    let roughness = textureSample(t_roughness, s_roughness, in.tex_coords).g;
+    let pbr = vec2<f32>(metallic, roughness);
 
-    // Create the lighting vectors
-    let light_dir = normalize(light.position - in.world_position);
-    let view_dir = normalize(in.world_view_position - in.world_position);
-    let half_dir = normalize(view_dir + light_dir);
-
-    let diffuse_strength = max(dot(world_normal, light_dir), 0.0);
-    let diffuse_color = light.color * diffuse_strength;
-
-    let specular_strength = pow(max(dot(world_normal, half_dir), 0.0), 32.0);
-    let specular_color = specular_strength * light.color;
-
-    // NEW!
-    // Calculate reflections
-    let world_reflect = reflect(-view_dir, world_normal);
-    let shininess = 0.1;
-    let reflection = textureSample(env_map, env_sampler, world_reflect).rgb;
-
-    let result = (diffuse_color + specular_color) * object_color.xyz + reflection * shininess;
-
-    return vec4<f32>(result, object_color.a);
+    return GBufferOutput(albedo, normal_out, pbr);
 }

@@ -46,7 +46,7 @@ impl RenderPass for SkyboxPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        depth_view: &wgpu::TextureView,
+        gbuffer: &crate::gbuffer::GBuffer,
         scene: &dyn Scene,
         resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
@@ -64,7 +64,7 @@ impl RenderPass for SkyboxPass {
                 },
             })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: depth_view,
+                view: &gbuffer.depth.view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Load,
                     store: wgpu::StoreOp::Store,
@@ -77,7 +77,9 @@ impl RenderPass for SkyboxPass {
         });
 
         // Fetch the environment bind group by the scene's skybox path
-        let env_bg = resources.get_bind_group(scene.skybox_path()).expect("Environment map must be set before rendering SkyboxPass");
+        let env_bg = resources
+            .get_bind_group(scene.skybox_path())
+            .expect("Environment map must be set before rendering SkyboxPass");
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &renderer.camera_bind_group, &[]);

@@ -128,144 +128,169 @@ impl ResourceManager {
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Le chemin du modèle est invalide"))?;
 
-    let scene = Importer::new()
-        .import_file_with(path_str, |b| {
-            b.with_post_process(
-                PostProcessSteps::TRIANGULATE
-                    | PostProcessSteps::CALC_TANGENT_SPACE
-                    | PostProcessSteps::JOIN_IDENTICAL_VERTICES
-                    | PostProcessSteps::FLIP_UVS,
-            )
-        })
-        .map_err(|e| anyhow::anyhow!("Assimp error during loading : {:?}", e))?;
+        let scene = Importer::new()
+            .import_file_with(path_str, |b| {
+                b.with_post_process(
+                    PostProcessSteps::TRIANGULATE
+                        | PostProcessSteps::CALC_TANGENT_SPACE
+                        | PostProcessSteps::JOIN_IDENTICAL_VERTICES
+                        | PostProcessSteps::FLIP_UVS,
+                )
+            })
+            .map_err(|e| anyhow::anyhow!("Assimp error during loading : {:?}", e))?;
 
-    // 3. Chargement des matériaux
-    let mut materials = Vec::new();
-    for m in scene.materials() {
-        let name = m.name();
+        // 3. Chargement des matériaux
+        let mut materials = Vec::new();
+        for m in scene.materials() {
+            let name = m.name();
 
-        // Recherche de la texture diffuse
-        let diffuse_texture = if m.texture_count(TextureType::Diffuse) > 0 {
-            let tex = m.texture(TextureType::Diffuse, 0).unwrap();
-            // tex.file contient le chemin de la texture (ex: "textures/diffuse.png")
-            // Ton helper load_texture va automatiquement le chercher dans "OUT_DIR/res/" !
-            self.load_texture(&tex.path, false, device, queue).await?
-        } else {
-            texture::Texture::fallback_diffuse(
+            // Recherche de la texture diffuse
+            let diffuse_texture = if m.texture_count(TextureType::Diffuse) > 0 {
+                let tex = m.texture(TextureType::Diffuse, 0).unwrap();
+                // tex.file contient le chemin de la texture (ex: "textures/diffuse.png")
+                // Ton helper load_texture va automatiquement le chercher dans "OUT_DIR/res/" !
+                self.load_texture(&tex.path, false, device, queue).await?
+            } else {
+                texture::Texture::fallback_diffuse(
+                    device,
+                    queue,
+                    Some(&format!("{}::diffuse_fallback", name)),
+                )?
+            };
+
+            // Recherche de la texture de normales ou de bump
+            let normal_texture = if m.texture_count(TextureType::Normals) > 0 {
+                let tex = m.texture(TextureType::Normals, 0).unwrap();
+                self.load_texture(&tex.path, true, device, queue).await?
+            } else if m.texture_count(TextureType::Height) > 0 {
+                let tex = m.texture(TextureType::Height, 0).unwrap();
+                self.load_texture(&tex.path, true, device, queue).await?
+            } else {
+                texture::Texture::fallback_normal(
+                    device,
+                    queue,
+                    Some(&format!("{}::normal_fallback", name)),
+                )?
+            };
+
+            // Recherche de la texture de normales ou de bump
+            let metalness_texture = if m.texture_count(TextureType::Metalness) > 0 {
+                let tex = m.texture(TextureType::Metalness, 0).unwrap();
+                self.load_texture(&tex.path, true, device, queue).await?
+            } else {
+                texture::Texture::fallback_metalness(
+                    device,
+                    queue,
+                    Some(&format!("{}::metalness_fallback", name)),
+                )?
+            };
+
+            let roughness_texture = if m.texture_count(TextureType::DiffuseRoughness) > 0 {
+                let tex = m.texture(TextureType::DiffuseRoughness, 0).unwrap();
+                self.load_texture(&tex.path, true, device, queue).await?
+            } else {
+                texture::Texture::fallback_roughness(
+                    device,
+                    queue,
+                    Some(&format!("{}::metalness_fallback", name)),
+                )?
+            };
+
+            materials.push(model::Material::new(
                 device,
-                queue,
-                Some(&format!("{}::diffuse_fallback", name)),
-            )?
-        };
+                &name,
+                diffuse_texture,
+                normal_texture,
+                roughness_texture,
+                metalness_texture,
+                layout,
+            ));
+        }
 
-        // Recherche de la texture de normales ou de bump
-        let normal_texture = if m.texture_count(TextureType::Normals) > 0 {
-            let tex = m.texture(TextureType::Normals, 0).unwrap();
-            self.load_texture(&tex.path, true, device, queue).await?
-        } else if m.texture_count(TextureType::Height) > 0 {
-            let tex = m.texture(TextureType::Height, 0).unwrap();
-            self.load_texture(&tex.path, true, device, queue).await?
-        } else {
-            texture::Texture::fallback_normal(
-                device,
-                queue,
-                Some(&format!("{}::normal_fallback", name)),
-            )?
-        };
+        // 4. Chargement et formatage de la géométrie (Meshes)
+        let mut meshes = Vec::new();
+        for m in scene.meshes() {
+            let positions = m.vertices();
+            let normals = m.normals();
+            let texcoords = m.texture_coords(0); // Premier canal UV
+            let texcoords = texcoords.as_ref();
+            let tangents = m.tangents();
+            let tangents = tangents.as_ref();
+            let bitangents = m.bitangents();
+            let bitangents = bitangents.as_ref();
 
-        materials.push(model::Material::new(
-            device,
-            &name,
-            diffuse_texture,
-            normal_texture,
-            layout,
-        ));
-    }
+            let mut vertices = Vec::with_capacity(positions.len());
 
-    // 4. Chargement et formatage de la géométrie (Meshes)
-    let mut meshes = Vec::new();
-    for m in scene.meshes() {
-        let positions = m.vertices();
-        let normals = m.normals();
-        let texcoords = m.texture_coords(0); // Premier canal UV
-        let texcoords = texcoords.as_ref();
-        let tangents = m.tangents();
-        let tangents = tangents.as_ref();
-        let bitangents = m.bitangents();
-        let bitangents = bitangents.as_ref();
+            for i in 0..positions.len() {
+                let pos = positions[i];
 
-        let mut vertices = Vec::with_capacity(positions.len());
+                // Assimp garantit ces tableaux s'ils ont été demandés,
+                // mais c'est toujours bien de sécuriser si le fichier d'origine est corrompu.
+                let normal = if let Some(normals) = normals.as_ref() {
+                    [normals[i].x, normals[i].y, normals[i].z]
+                } else {
+                    [0.0, 0.0, 0.0]
+                };
+                let tc = if let Some(uvs) = texcoords {
+                    [uvs[i].x, uvs[i].y]
+                } else {
+                    [0.0, 0.0]
+                };
 
-        for i in 0..positions.len() {
-            let pos = positions[i];
+                let tangent = if let Some(t) = tangents {
+                    [t[i].x, t[i].y, t[i].z]
+                } else {
+                    [0.0, 0.0, 0.0]
+                };
 
-            // Assimp garantit ces tableaux s'ils ont été demandés,
-            // mais c'est toujours bien de sécuriser si le fichier d'origine est corrompu.
-            let normal = if let Some(normals) = normals.as_ref() {
-                [normals[i].x, normals[i].y, normals[i].z]
-            } else {
-                [0.0, 0.0, 0.0]
-            };
-            let tc = if let Some(uvs) = texcoords {
-                [uvs[i].x, uvs[i].y]
-            } else {
-                [0.0, 0.0]
-            };
+                let bitangent = if let Some(b) = bitangents {
+                    [b[i].x, b[i].y, b[i].z]
+                } else {
+                    [0.0, 0.0, 0.0]
+                };
 
-            let tangent = if let Some(t) = tangents {
-                [t[i].x, t[i].y, t[i].z]
-            } else {
-                [0.0, 0.0, 0.0]
-            };
+                vertices.push(model::ModelVertex {
+                    position: [pos.x, pos.y, pos.z],
+                    tex_coords: tc,
+                    normal,
+                    tangent,
+                    bitangent,
+                });
+            }
 
-            let bitangent = if let Some(b) = bitangents {
-                [b[i].x, b[i].y, b[i].z]
-            } else {
-                [0.0, 0.0, 0.0]
-            };
+            let mut indices = Vec::new();
+            for face in m.faces() {
+                indices.extend_from_slice(&face.indices());
+            }
 
-            vertices.push(model::ModelVertex {
-                position: [pos.x, pos.y, pos.z],
-                tex_coords: tc,
-                normal,
-                tangent,
-                bitangent,
+            let mesh_name = m.name();
+
+            let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&format!("{} Vertex Buffer", mesh_name)),
+                contents: bytemuck::cast_slice(&vertices),
+                usage: wgpu::BufferUsages::VERTEX,
+            });
+
+            let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some(&format!("{} Index Buffer", mesh_name)),
+                contents: bytemuck::cast_slice(&indices),
+                usage: wgpu::BufferUsages::INDEX,
+            });
+
+            meshes.push(model::Mesh {
+                name: mesh_name,
+                vertex_buffer,
+                index_buffer,
+                num_elements: indices.len() as u32,
+                material: m.material_index() as usize,
             });
         }
 
-        let mut indices = Vec::new();
-        for face in m.faces() {
-            indices.extend_from_slice(&face.indices());
-        }
+        let model = model::Model { meshes, materials };
+        self.models.insert(file_name.to_string(), model);
 
-        let mesh_name = m.name();
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("{} Vertex Buffer", mesh_name)),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some(&format!("{} Index Buffer", mesh_name)),
-            contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-
-        meshes.push(model::Mesh {
-            name: mesh_name,
-            vertex_buffer,
-            index_buffer,
-            num_elements: indices.len() as u32,
-            material: m.material_index() as usize,
-        });
+        Ok(())
     }
-
-    let model = model::Model { meshes, materials };
-    self.models.insert(file_name.to_string(), model);
-
-    Ok(())
-}
 
     pub async fn load_hdr_environment(
         &mut self,
@@ -392,7 +417,8 @@ impl ResourceManager {
             ],
         });
 
-        self.bind_groups.insert(file_name.to_string(), environment_bind_group);
+        self.bind_groups
+            .insert(file_name.to_string(), environment_bind_group);
         self.cube_textures.insert(file_name.to_string(), dst);
 
         Ok(())
