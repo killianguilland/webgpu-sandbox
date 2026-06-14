@@ -180,12 +180,14 @@ pub fn create_render_pipeline(
 // --------------------------------------------------------------------------
 
 pub trait RenderPass {
+    fn name(&self) -> &str;
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
         scene: &dyn Scene,
+        resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
     );
@@ -205,8 +207,8 @@ pub struct Renderer {
     pub light_bind_group: wgpu::BindGroup,
 
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub environment_layout: wgpu::BindGroupLayout,
 
-    pub models: HashMap<String, Model>,
     pub instance_buffers: HashMap<String, (wgpu::Buffer, u32)>,
 
     pub projection: Projection,
@@ -325,6 +327,29 @@ impl Renderer {
                 label: Some("texture_bind_group_layout"),
             });
 
+        let environment_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("environment_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            view_dimension: wgpu::TextureViewDimension::Cube,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
+                        count: None,
+                    },
+                ],
+            });
+
         let projection = Projection::new(
             context.config.width,
             context.config.height,
@@ -341,7 +366,7 @@ impl Renderer {
             light_bind_group_layout,
             light_bind_group,
             texture_bind_group_layout,
-            models: HashMap::new(),
+            environment_layout,
             instance_buffers: HashMap::new(),
             projection,
             passes: Vec::new(),
@@ -354,29 +379,6 @@ impl Renderer {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.projection.resize(width, height);
-    }
-
-    pub fn get_model(&self, name: &str) -> Option<&Model> {
-        self.models.get(name)
-    }
-
-    pub async fn load_model(
-        &mut self,
-        name: &str,
-        context: &GraphicsContext,
-    ) -> anyhow::Result<()> {
-        if self.models.contains_key(name) {
-            return Ok(());
-        }
-        let model = crate::resources::load_model(
-            name,
-            &context.device,
-            &context.queue,
-            &self.texture_bind_group_layout,
-        )
-        .await?;
-        self.models.insert(name.to_string(), model);
-        Ok(())
     }
 
     pub fn update(&mut self, context: &GraphicsContext, scene: &dyn Scene) {
@@ -440,10 +442,18 @@ impl Renderer {
         view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
         scene: &dyn Scene,
+        resources: &crate::resources::ResourceManager,
         encoder: &mut wgpu::CommandEncoder,
+        settings: &crate::settings::RenderSettings,
     ) {
         for pass in &self.passes {
-            pass.render(encoder, view, depth_view, scene, context, self);
+            if let Some(&enabled) = settings.pass_states.get(pass.name()) {
+                if !enabled {
+                    continue;
+                }
+            }
+
+            pass.render(encoder, view, depth_view, scene, resources, context, self);
         }
     }
 }

@@ -31,16 +31,14 @@ impl GraphicsContext {
             .await?;
 
         let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    label: None,
-                    required_features: adapter.features() & wgpu::Features::all_webgpu_mask(),
-                    experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                    required_limits: wgpu::Limits::defaults(),
-                    memory_hints: Default::default(),
-                    trace: wgpu::Trace::Off,
-                }
-            )
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                required_features: adapter.features() & wgpu::Features::all_webgpu_mask(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
+                required_limits: wgpu::Limits::defaults(),
+                memory_hints: Default::default(),
+                trace: wgpu::Trace::Off,
+            })
             .await?;
 
         let surface_caps = surface.get_capabilities(&adapter);
@@ -51,13 +49,26 @@ impl GraphicsContext {
             .copied()
             .unwrap_or(surface_caps.formats[0]);
 
+        let alpha_mode = surface_caps
+            .alpha_modes
+            .iter()
+            .copied()
+            .find(|m| {
+                matches!(
+                    m,
+                    wgpu::CompositeAlphaMode::PreMultiplied
+                        | wgpu::CompositeAlphaMode::PostMultiplied
+                )
+            })
+            .unwrap_or(surface_caps.alpha_modes[0]);
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: surface_format,
             width: size.width.max(1),
             height: size.height.max(1),
             present_mode: surface_caps.present_modes[0],
-            alpha_mode: surface_caps.alpha_modes[0],
+            alpha_mode: alpha_mode,
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };

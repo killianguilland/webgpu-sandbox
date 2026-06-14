@@ -9,6 +9,7 @@ use winit::{
 };
 
 use crate::context::GraphicsContext;
+use crate::depth::Depth;
 use crate::hdr::Hdr;
 use crate::input::Input;
 use crate::passes::{ClearPass, DebugPass, OpaquePass, SkyboxPass};
@@ -22,11 +23,14 @@ pub struct EngineState {
     pub context: GraphicsContext,
     pub renderer: Renderer,
     pub scene: Box<dyn Scene>,
+    pub resources: resources::ResourceManager,
     pub input: Input,
-    pub hdr: Hdr,
+    pub hdr_visualizer: Hdr,
+    pub depth_visualizer: Depth,
     pub depth_texture: texture::Texture,
     pub ui: crate::ui::UiState,
     pub app_ui: crate::ui::AppUi,
+    pub settings: crate::settings::RenderSettings,
 }
 
 impl EngineState {
@@ -34,6 +38,7 @@ impl EngineState {
         let context = GraphicsContext::new(window).await?;
 
         let mut renderer = Renderer::new(&context);
+        let mut resources = resources::ResourceManager::new(&context.device);
 
         let ui = crate::ui::UiState::new(&context);
         let app_ui = crate::ui::AppUi::new();
@@ -46,55 +51,70 @@ impl EngineState {
             "depth_texture",
         );
 
+        let depth_visualizer =
+            crate::depth::Depth::new(&context.device, &context.config, &depth_texture);
+
         let scene = DefaultScene::new();
 
         for model_name in scene.required_models() {
-            renderer.load_model(model_name, &context).await?;
+            resources
+                .load_model(
+                    model_name,
+                    &context.device,
+                    &context.queue,
+                    &renderer.texture_bind_group_layout,
+                )
+                .await?;
         }
 
+        let mut settings = crate::settings::RenderSettings::new();
         renderer.add_pass(Box::new(ClearPass));
+        settings.pass_states.insert("Clear".to_string(), true);
         renderer.add_pass(Box::new(DebugPass::new(&context, &renderer, hdr.format())));
+        settings.pass_states.insert("Debug".to_string(), true);
         renderer.add_pass(Box::new(OpaquePass::new(&context, &renderer, hdr.format())));
+        settings.pass_states.insert("Opaque".to_string(), true);
 
-        if let Some(sky_path) = scene.skybox_path() {
-            let hdr_loader = resources::HdrLoader::new(&context.device);
-            let sky_bytes = resources::load_binary(sky_path).await?;
-            let sky_texture = hdr_loader.from_equirectangular_bytes(
+        resources
+            .load_hdr_environment(
+                scene.skybox_path(),
                 &context.device,
                 &context.queue,
-                &sky_bytes,
+                &renderer.environment_layout,
                 1080,
                 Some("Sky Texture"),
-            )?;
-            renderer.add_pass(Box::new(SkyboxPass::new(
-                &context,
-                &renderer,
-                hdr.format(),
-                &sky_texture,
-            )));
-        }
+            )
+            .await?;
+        renderer.add_pass(Box::new(SkyboxPass::new(&context, &renderer, hdr.format())));
+        settings.pass_states.insert("Skybox".to_string(), true);
 
         Ok(Self {
             context,
             renderer,
             scene: Box::new(scene),
+            resources,
             input: Input::new(),
-            hdr,
+            hdr_visualizer: hdr,
+            depth_visualizer: depth_visualizer,
             depth_texture,
             ui,
             app_ui,
+            settings,
         })
     }
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.context.resize(width, height);
         self.renderer.resize(width, height);
-        self.hdr.resize(&self.context.device, width, height);
+        self.hdr_visualizer
+            .resize(&self.context.device, width, height);
         self.depth_texture = texture::Texture::create_depth_texture(
             &self.context.device,
             &self.context.config,
             "depth_texture",
         );
+        self.depth_visualizer
+            .resize(&self.context.device, &self.depth_texture);
     }
 
     pub fn update(&mut self, dt: std::time::Duration) {
@@ -142,17 +162,26 @@ impl EngineState {
 
         self.renderer.render(
             &self.context,
-            &self.hdr.view(),
+            &self.hdr_visualizer.view(),
             &self.depth_texture.view,
             self.scene.as_ref(),
+            &self.resources,
             &mut encoder,
+            &mut self.settings,
         );
 
-        self.hdr.process(&mut encoder, &view);
+        self.hdr_visualizer.process(&mut encoder, &view);
 
-        let models = &self.renderer.models;
+        if self.settings.show_depthmap {
+            self.depth_visualizer.process(&mut encoder, &view);
+        } else {
+            self.hdr_visualizer.process(&mut encoder, &view);
+        }
+
+        let models = &self.resources.models;
         self.ui.draw(&self.context, &mut encoder, &view, |ui| {
-            self.app_ui.show(ui, self.scene.as_ref(), models);
+            self.app_ui
+                .show(ui, self.scene.as_ref(), models, &mut self.settings);
         });
 
         self.context.queue.submit(std::iter::once(encoder.finish()));
@@ -182,7 +211,9 @@ impl ApplicationHandler<EngineState> for App {
             return;
         }
 
-        let window_attributes = Window::default_attributes();
+        let window_attributes = Window::default_attributes()
+            .with_transparent(true)
+            .with_blur(true);
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         self.state = Some(pollster::block_on(EngineState::new(window)).unwrap());

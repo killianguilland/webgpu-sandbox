@@ -1,6 +1,7 @@
 pub mod app;
 mod camera;
 pub mod context;
+mod depth;
 mod hdr;
 pub mod input;
 mod model;
@@ -8,6 +9,7 @@ pub mod passes;
 pub mod renderer;
 mod resources;
 pub mod scenes;
+pub mod settings;
 mod texture;
 mod ui;
 

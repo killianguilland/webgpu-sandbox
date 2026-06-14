@@ -56,7 +56,5 @@ pub trait Scene {
     }
     fn instances(&self) -> &[Instance];
     fn lights(&self) -> &[Light];
-    fn skybox_path(&self) -> Option<&str> {
-        None
-    }
+    fn skybox_path(&self) -> &str;
 }

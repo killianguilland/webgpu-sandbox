@@ -88,7 +88,7 @@ impl Scene for DefaultScene {
         &self.lights
     }
 
-    fn skybox_path(&self) -> Option<&str> {
-        Some("pure-sky.hdr")
+    fn skybox_path(&self) -> &str {
+        "pure-sky.hdr"
     }
 }

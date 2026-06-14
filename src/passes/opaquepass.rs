@@ -23,6 +23,7 @@ impl OpaquePass {
                         Some(&renderer.texture_bind_group_layout),
                         Some(&renderer.camera_bind_group_layout),
                         Some(&renderer.light_bind_group_layout),
+                        Some(&renderer.environment_layout),
                     ],
                     immediate_size: 0,
                 });
@@ -47,12 +48,17 @@ impl OpaquePass {
 }
 
 impl RenderPass for OpaquePass {
+    fn name(&self) -> &str {
+        "Opaque"
+    }
+
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
-        _scene: &dyn Scene,
+        scene: &dyn Scene,
+        resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
     ) {
@@ -80,13 +86,16 @@ impl RenderPass for OpaquePass {
             multiview_mask: None,
         });
 
-        // render_pass.set_vertex_buffer(1, renderer.instance_buffer.slice(..));
         render_pass.set_pipeline(&self.render_pipeline);
 
+        if let Some(env_bg) = resources.get_bind_group(scene.skybox_path()) {
+            render_pass.set_bind_group(3, env_bg, &[]);
+        }
+
         use crate::model::DrawModel;
-        for (model_name, model) in &renderer.models {
-            // If this model has active instances in the scene, draw it!
-            if let Some((instance_buffer, count)) = renderer.instance_buffers.get(model_name) {
+        for (model_name, (instance_buffer, count)) in &renderer.instance_buffers {
+            // If this model is loaded, draw it!
+            if let Some(model) = resources.get_model(model_name) {
                 render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
                 render_pass.draw_model_instanced(
                     model,

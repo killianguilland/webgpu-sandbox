@@ -5,43 +5,128 @@ use wgpu::util::DeviceExt;
 use image::codecs::hdr::HdrDecoder;
 
 use crate::{model, texture};
-
-pub async fn load_binary(file_name: &str) -> anyhow::Result<Vec<u8>> {
-    let data = {
-        let path = std::path::Path::new(env!("OUT_DIR"))
-            .join("res")
-            .join(file_name);
-        std::fs::read(path)?
-    };
-
-    Ok(data)
-}
-
-pub async fn load_texture(
-    file_name: &str,
-    is_linear: bool,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-) -> anyhow::Result<texture::Texture> {
-    let data = load_binary(file_name).await?;
-    texture::Texture::from_bytes(device, queue, &data, file_name, is_linear)
-}
-
 use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps};
 
-pub async fn load_model(
-    file_name: &str,
-    device: &wgpu::Device,
-    queue: &wgpu::Queue,
-    layout: &wgpu::BindGroupLayout,
-) -> anyhow::Result<model::Model> {
-    let model_path = std::path::Path::new(env!("OUT_DIR"))
-        .join("res")
-        .join(file_name);
+use std::collections::HashMap;
 
-    let path_str = model_path
-        .to_str()
-        .ok_or_else(|| anyhow::anyhow!("Le chemin du modèle est invalide"))?;
+pub struct ResourceManager {
+    pub models: HashMap<String, model::Model>,
+    pub cube_textures: HashMap<String, texture::CubeTexture>,
+    pub bind_groups: HashMap<String, wgpu::BindGroup>,
+
+    equirect_layout: wgpu::BindGroupLayout,
+    equirect_to_cubemap: wgpu::ComputePipeline,
+    texture_format: wgpu::TextureFormat,
+}
+
+impl ResourceManager {
+    pub fn new(device: &wgpu::Device) -> Self {
+        let module =
+            device.create_shader_module(wgpu::include_wgsl!("shaders/equirectangular.wgsl"));
+        let texture_format = wgpu::TextureFormat::Rgba32Float;
+        let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("ResourceManager::equirect_layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::StorageTexture {
+                        access: wgpu::StorageTextureAccess::WriteOnly,
+                        format: texture_format,
+                        view_dimension: wgpu::TextureViewDimension::D2Array,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
+            bind_group_layouts: &[Some(&equirect_layout)],
+            immediate_size: 0,
+        });
+
+        let equirect_to_cubemap =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("equirect_to_cubemap"),
+                layout: Some(&pipeline_layout),
+                module: &module,
+                entry_point: Some("compute_equirect_to_cubemap"),
+                compilation_options: Default::default(),
+                cache: None,
+            });
+
+        Self {
+            models: HashMap::new(),
+            cube_textures: HashMap::new(),
+            bind_groups: HashMap::new(),
+            equirect_to_cubemap,
+            texture_format,
+            equirect_layout,
+        }
+    }
+
+    pub fn get_model(&self, name: &str) -> Option<&model::Model> {
+        self.models.get(name)
+    }
+
+    pub fn get_bind_group(&self, name: &str) -> Option<&wgpu::BindGroup> {
+        self.bind_groups.get(name)
+    }
+
+    pub fn get_cube_texture(&self, name: &str) -> Option<&texture::CubeTexture> {
+        self.cube_textures.get(name)
+    }
+
+    pub async fn load_binary(&self, file_name: &str) -> anyhow::Result<Vec<u8>> {
+        let data = {
+            let path = std::path::Path::new(env!("OUT_DIR"))
+                .join("res")
+                .join(file_name);
+            std::fs::read(path)?
+        };
+        Ok(data)
+    }
+
+    pub async fn load_texture(
+        &self,
+        file_name: &str,
+        is_linear: bool,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> anyhow::Result<texture::Texture> {
+        let data = self.load_binary(file_name).await?;
+        texture::Texture::from_bytes(device, queue, &data, file_name, is_linear)
+    }
+
+    pub async fn load_model(
+        &mut self,
+        file_name: &str,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        layout: &wgpu::BindGroupLayout,
+    ) -> anyhow::Result<()> {
+        if self.models.contains_key(file_name) {
+            return Ok(());
+        }
+
+        let model_path = std::path::Path::new(env!("OUT_DIR"))
+            .join("res")
+            .join(file_name);
+
+        let path_str = model_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Le chemin du modèle est invalide"))?;
 
     let scene = Importer::new()
         .import_file_with(path_str, |b| {
@@ -64,7 +149,7 @@ pub async fn load_model(
             let tex = m.texture(TextureType::Diffuse, 0).unwrap();
             // tex.file contient le chemin de la texture (ex: "textures/diffuse.png")
             // Ton helper load_texture va automatiquement le chercher dans "OUT_DIR/res/" !
-            load_texture(&tex.path, false, device, queue).await?
+            self.load_texture(&tex.path, false, device, queue).await?
         } else {
             texture::Texture::fallback_diffuse(
                 device,
@@ -76,10 +161,10 @@ pub async fn load_model(
         // Recherche de la texture de normales ou de bump
         let normal_texture = if m.texture_count(TextureType::Normals) > 0 {
             let tex = m.texture(TextureType::Normals, 0).unwrap();
-            load_texture(&tex.path, true, device, queue).await?
+            self.load_texture(&tex.path, true, device, queue).await?
         } else if m.texture_count(TextureType::Height) > 0 {
             let tex = m.texture(TextureType::Height, 0).unwrap();
-            load_texture(&tex.path, true, device, queue).await?
+            self.load_texture(&tex.path, true, device, queue).await?
         } else {
             texture::Texture::fallback_normal(
                 device,
@@ -176,78 +261,28 @@ pub async fn load_model(
         });
     }
 
-    Ok(model::Model { meshes, materials })
+    let model = model::Model { meshes, materials };
+    self.models.insert(file_name.to_string(), model);
+
+    Ok(())
 }
 
-pub struct HdrLoader {
-    texture_format: wgpu::TextureFormat,
-    equirect_layout: wgpu::BindGroupLayout,
-    equirect_to_cubemap: wgpu::ComputePipeline,
-}
-
-impl HdrLoader {
-    pub fn new(device: &wgpu::Device) -> Self {
-        let module =
-            device.create_shader_module(wgpu::include_wgsl!("shaders/equirectangular.wgsl"));
-        let texture_format = wgpu::TextureFormat::Rgba32Float;
-        let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("HdrLoader::equirect_layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
-                        access: wgpu::StorageTextureAccess::WriteOnly,
-                        format: texture_format,
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[Some(&equirect_layout)],
-            immediate_size: 0,
-        });
-
-        let equirect_to_cubemap =
-            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("equirect_to_cubemap"),
-                layout: Some(&pipeline_layout),
-                module: &module,
-                entry_point: Some("compute_equirect_to_cubemap"),
-                compilation_options: Default::default(),
-                cache: None,
-            });
-
-        Self {
-            equirect_to_cubemap,
-            texture_format,
-            equirect_layout,
-        }
-    }
-
-    pub fn from_equirectangular_bytes(
-        &self,
+    pub async fn load_hdr_environment(
+        &mut self,
+        file_name: &str,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        data: &[u8],
+        layout: &wgpu::BindGroupLayout,
         dst_size: u32,
         label: Option<&str>,
-    ) -> anyhow::Result<texture::CubeTexture> {
-        let hdr_decoder = HdrDecoder::new(Cursor::new(data))?;
+    ) -> anyhow::Result<()> {
+        if self.cube_textures.contains_key(file_name) {
+            return Ok(());
+        }
+
+        let data = self.load_binary(file_name).await?;
+
+        let hdr_decoder = HdrDecoder::new(Cursor::new(&data))?;
         let meta = hdr_decoder.metadata();
 
         let pixels = {
@@ -342,6 +377,24 @@ impl HdrLoader {
 
         queue.submit([encoder.finish()]);
 
-        Ok(dst)
+        let environment_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("environment_bind_group"),
+            layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&dst.view()),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&dst.sampler()),
+                },
+            ],
+        });
+
+        self.bind_groups.insert(file_name.to_string(), environment_bind_group);
+        self.cube_textures.insert(file_name.to_string(), dst);
+
+        Ok(())
     }
 }

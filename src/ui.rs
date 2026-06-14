@@ -114,16 +114,25 @@ impl AppUi {
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, scene: &dyn Scene, models: &HashMap<String, Model>) {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        scene: &dyn Scene,
+        models: &HashMap<String, Model>,
+        settings: &mut crate::settings::RenderSettings,
+    ) {
         egui::Window::new("Viewer settings").show(ui.ctx(), |window_ui| {
             window_ui.heading("Render options");
             window_ui.label(format!(
-                "Camera position: x {} y {} z {}",
+                "Camera position: X {} | Y {} | Z {}",
                 scene.camera().position.x.round(),
                 scene.camera().position.y.round(),
                 scene.camera().position.z.round(),
             ));
-            window_ui.checkbox(&mut false, "Display depthmap");
+            for (pass_name, is_enabled) in settings.pass_states.iter_mut() {
+                window_ui.checkbox(is_enabled, format!("{} pass", pass_name));
+            }
+            window_ui.checkbox(&mut settings.show_depthmap, "Display depthmap");
             window_ui.heading("Models inspector");
             for model_name in models.keys() {
                 if window_ui.button(model_name).clicked() {
@@ -171,7 +180,7 @@ impl AppUi {
                         .default_open(true)
                         .show(_window_ui, |ui| {
                             for mat in model.materials.iter() {
-                                egui::CollapsingHeader::new(&mat.name).show(ui, |ui| {});
+                                egui::CollapsingHeader::new(&mat.name).show(ui, |_ui| {});
                             }
                         });
                 });

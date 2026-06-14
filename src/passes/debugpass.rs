@@ -117,12 +117,17 @@ impl DebugPass {
 }
 
 impl crate::renderer::RenderPass for DebugPass {
+    fn name(&self) -> &str {
+        "Debug"
+    }
+
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
         scene: &dyn Scene,
+        _resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
     ) {

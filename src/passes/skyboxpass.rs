@@ -5,7 +5,6 @@ use crate::texture;
 
 pub struct SkyboxPass {
     pub render_pipeline: wgpu::RenderPipeline,
-    pub environment_bind_group: wgpu::BindGroup,
 }
 
 impl SkyboxPass {
@@ -13,57 +12,14 @@ impl SkyboxPass {
         context: &GraphicsContext,
         renderer: &Renderer,
         hdr_format: wgpu::TextureFormat,
-        sky_texture: &texture::CubeTexture,
     ) -> Self {
-        let environment_layout =
-            context
-                .device
-                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    label: Some("environment_layout"),
-                    entries: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Texture {
-                                sample_type: wgpu::TextureSampleType::Float { filterable: false },
-                                view_dimension: wgpu::TextureViewDimension::Cube,
-                                multisampled: false,
-                            },
-                            count: None,
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1,
-                            visibility: wgpu::ShaderStages::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
-                            count: None,
-                        },
-                    ],
-                });
-
-        let environment_bind_group = context
-            .device
-            .create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("environment_bind_group"),
-                layout: &environment_layout,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&sky_texture.view()),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&sky_texture.sampler()),
-                    },
-                ],
-            });
-
         let layout = context
             .device
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Skybox Pipeline Layout"),
                 bind_group_layouts: &[
                     Some(&renderer.camera_bind_group_layout),
-                    Some(&environment_layout),
+                    Some(&renderer.environment_layout),
                 ],
                 immediate_size: 0,
             });
@@ -78,20 +34,21 @@ impl SkyboxPass {
             shader,
         );
 
-        Self {
-            render_pipeline,
-            environment_bind_group,
-        }
+        Self { render_pipeline }
     }
 }
 
 impl RenderPass for SkyboxPass {
+    fn name(&self) -> &str {
+        "Skybox"
+    }
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
-        _scene: &dyn Scene,
+        scene: &dyn Scene,
+        resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
     ) {
@@ -119,9 +76,12 @@ impl RenderPass for SkyboxPass {
             multiview_mask: None,
         });
 
+        // Fetch the environment bind group by the scene's skybox path
+        let env_bg = resources.get_bind_group(scene.skybox_path()).expect("Environment map must be set before rendering SkyboxPass");
+
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &renderer.camera_bind_group, &[]);
-        render_pass.set_bind_group(1, &self.environment_bind_group, &[]);
+        render_pass.set_bind_group(1, env_bg, &[]);
         render_pass.draw(0..3, 0..1);
     }
 }

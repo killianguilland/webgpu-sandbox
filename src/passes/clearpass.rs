@@ -5,12 +5,17 @@ use crate::scenes::Scene;
 pub struct ClearPass;
 
 impl RenderPass for ClearPass {
+    fn name(&self) -> &str {
+        "Clear"
+    }
+
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         depth_view: &wgpu::TextureView,
         _scene: &dyn Scene,
+        _resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         _renderer: &Renderer,
     ) {
@@ -22,10 +27,10 @@ impl RenderPass for ClearPass {
                 depth_slice: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.5,
-                        g: 0.5,
-                        b: 1.0,
-                        a: 1.0,
+                        r: 0.0,
+                        g: 0.0,
+                        b: 0.0,
+                        a: 0.2,
                     }),
                     store: wgpu::StoreOp::Store,
                 },
