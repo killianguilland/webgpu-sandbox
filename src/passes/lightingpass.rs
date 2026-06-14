@@ -22,6 +22,7 @@ impl LightingPass {
                         Some(&gbuffer.layout),
                         Some(&renderer.camera_bind_group_layout),
                         Some(&renderer.light_bind_group_layout),
+                        Some(&renderer.environment_layout),
                     ],
                     immediate_size: 0,
                 });
@@ -79,8 +80,8 @@ impl crate::renderer::RenderPass for LightingPass {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
-        _scene: &dyn crate::scenes::Scene,
-        _resources: &crate::resources::ResourceManager,
+        scene: &dyn crate::scenes::Scene,
+        resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &crate::renderer::Renderer,
     ) {
@@ -102,10 +103,14 @@ impl crate::renderer::RenderPass for LightingPass {
             timestamp_writes: None,
             multiview_mask: None,
         });
+
+        let env_bind_group = resources.bind_groups.get(scene.skybox_path()).unwrap();
+
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &gbuffer.bind_group, &[]);
         pass.set_bind_group(1, &renderer.camera_bind_group, &[]);
         pass.set_bind_group(2, &renderer.light_bind_group, &[]);
+        pass.set_bind_group(3, env_bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

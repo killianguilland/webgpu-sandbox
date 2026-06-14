@@ -50,13 +50,6 @@ fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
 @group(0) @binding(2) var t_pbr: texture_2d<f32>;
 @group(0) @binding(3) var t_depth: texture_depth_2d;
 @group(0) @binding(4) var s_sampler: sampler;
-// Group 2: Lights
-struct Light {
-    position: vec3<f32>,
-    // There's a 4-byte padding here due to WGSL alignment rules!
-    color: vec3<f32>,
-};
-@group(2) @binding(0) var<uniform> light: Light;
 
 // Group 1: Camera
 struct CameraUniform {
@@ -67,6 +60,18 @@ struct CameraUniform {
     inv_view: mat4x4<f32>,
 };
 @group(1) @binding(0) var<uniform> camera: CameraUniform;
+
+// Group 2: Lights
+struct Light {
+    position: vec3<f32>,
+    // There's a 4-byte padding here due to WGSL alignment rules!
+    color: vec3<f32>,
+};
+@group(2) @binding(0) var<uniform> light: Light;
+
+// Group 3: Skybox
+@group(3) @binding(0) var t_env: texture_cube<f32>;
+@group(3) @binding(1) var s_env: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -120,8 +125,23 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 8. Final Lighting Math
     let NdotL = max(dot(N, L), 0.0);
     let Lo = (kD * albedo / PI + specular) * radiance * NdotL;
-    // 9. Add a tiny bit of ambient light so the shadows aren't pitch black
-    let ambient = vec3<f32>(0.03) * albedo * mix(vec3<f32>(1.0), vec3<f32>(0.0), metallic);
     
+    // 9. IBL (Image Based Lighting)
+    // Calculate where the camera ray bounces off the surface
+    let R = reflect(-V, N);
+
+    // Sample the skybox! The rougher the surface, the higher the Mipmap level (blurrier)
+    let max_reflection_lod = 8.0; 
+    let reflection = textureSampleLevel(t_env, s_env, R, roughness * max_reflection_lod).rgb;
+
+    // How much light bounces off like a mirror? (F0 is our base reflectivity)
+    let kS_ibl = F0;
+
+    // How much light gets absorbed and becomes diffuse color?
+    let kD_ibl = (vec3<f32>(1.0) - kS_ibl) * (1.0 - metallic);
+
+    // Combine the diffuse ambient (darkened heavily) and the shiny skybox reflection!
+    let ambient = (kD_ibl * albedo * 0.03) + (reflection * kS_ibl);
+
     return vec4<f32>(ambient + Lo, 1.0);
 }
