@@ -3,7 +3,6 @@ use wgpu::util::DeviceExt;
 use crate::camera::{Camera, Projection};
 use crate::context::GraphicsContext;
 use crate::scenes::{Instance, Scene};
-use cgmath::Matrix;
 use std::collections::HashMap;
 
 #[repr(C)]
@@ -46,7 +45,7 @@ impl CameraUniform {
         self.view = view.into();
         self.view_proj = view_proj.into();
         self.inv_proj = proj.invert().unwrap().into();
-        self.inv_view = view.transpose().into();
+        self.inv_view = view.invert().unwrap().into();
     }
 }
 
@@ -253,7 +252,7 @@ impl Renderer {
         let light_uniform = LightUniform {
             position: [2.0, 2.0, 2.0],
             _padding: 0,
-            color: [1.0, 1.0, 1.0],
+            color: [300.0, 300.0, 300.0],
             _padding2: 0,
         };
 

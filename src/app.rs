@@ -8,7 +8,6 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::gbuffer;
 use crate::input::Input;
 use crate::passes::{ClearPass, GeometryPass, GizmoPass, SkyboxPass};
 use crate::postprocess::hdr::Hdr;
@@ -18,6 +17,7 @@ use crate::resources;
 use crate::scenes::Scene;
 use crate::scenes::default_scene::DefaultScene;
 use crate::{context::GraphicsContext, gbuffer::GBuffer};
+use crate::{gbuffer, passes::lightingpass::LightingPass};
 
 pub struct EngineState {
     pub context: GraphicsContext,
@@ -73,6 +73,13 @@ impl EngineState {
             hdr.format(),
         )));
         settings.pass_states.insert("Geometry".to_string(), true);
+        renderer.add_pass(Box::new(LightingPass::new(
+            &context,
+            &renderer,
+            &gbuffer,
+            hdr.format(),
+        )));
+        settings.pass_states.insert("Lighting".to_string(), true);
 
         resources
             .load_hdr_environment(

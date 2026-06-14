@@ -26,7 +26,7 @@ impl DefaultScene {
 
         let lights = vec![Light {
             position: Vector3::new(2.0, 2.0, 2.0),
-            color: Vector3::new(1.0, 1.0, 1.0),
+            color: Vector3::new(300.0, 300.0, 300.0),
         }];
 
         Self {
