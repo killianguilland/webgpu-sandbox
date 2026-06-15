@@ -141,7 +141,7 @@ impl CameraController {
         } else {
             0.0
         };
-        self.amount_down = if input.is_key_pressed(KeyCode::ShiftLeft) {
+        self.amount_down = if input.is_key_pressed(KeyCode::ControlLeft) {
             1.0
         } else {
             0.0

@@ -53,7 +53,7 @@ impl Input {
                         self.scroll_delta += *y;
                     }
                     winit::event::MouseScrollDelta::PixelDelta(pos) => {
-                        self.scroll_delta += pos.y as f32;
+                        self.scroll_delta += (pos.y as f32) * 0.02;
                     }
                 }
                 true
