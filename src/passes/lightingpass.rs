@@ -80,7 +80,7 @@ impl crate::renderer::RenderPass for LightingPass {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
-        scene: &dyn crate::scenes::Scene,
+        viewer: &crate::viewer::ModelViewer,
         resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &crate::renderer::Renderer,
@@ -104,7 +104,7 @@ impl crate::renderer::RenderPass for LightingPass {
             multiview_mask: None,
         });
 
-        let env_bind_group = resources.bind_groups.get(scene.skybox_path()).unwrap();
+        let env_bind_group = resources.bind_groups.get(&viewer.skybox_path).unwrap();
 
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &gbuffer.bind_group, &[]);

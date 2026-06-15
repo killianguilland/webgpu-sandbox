@@ -1,6 +1,6 @@
 use crate::context::GraphicsContext;
 use crate::renderer::{Renderer, create_render_pipeline};
-use crate::scenes::Scene;
+use crate::viewer::ModelViewer;
 use crate::texture;
 
 #[repr(C)]
@@ -126,7 +126,7 @@ impl crate::renderer::RenderPass for GizmoPass {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
-        scene: &dyn Scene,
+        viewer: &ModelViewer,
         _resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
@@ -157,7 +157,7 @@ impl crate::renderer::RenderPass for GizmoPass {
 
         render_pass.set_pipeline(&self.render_pipeline);
 
-        let gizmo_nodes = scene.gizmo_nodes();
+        let gizmo_nodes = viewer.gizmo_nodes();
         if gizmo_nodes.is_empty() {
             return;
         }

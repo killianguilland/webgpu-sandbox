@@ -1,5 +1,5 @@
 use crate::model::Model;
-use crate::{context::GraphicsContext, scenes::Scene};
+use crate::{context::GraphicsContext, viewer::ModelViewer};
 use std::collections::{HashMap, HashSet};
 
 pub struct UiState {
@@ -117,7 +117,7 @@ impl AppUi {
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
-        scene: &dyn Scene,
+        viewer: &ModelViewer,
         models: &HashMap<String, Model>,
         settings: &mut crate::settings::RenderSettings,
     ) {
@@ -125,9 +125,9 @@ impl AppUi {
             window_ui.heading("Render options");
             window_ui.label(format!(
                 "Camera position: X {} | Y {} | Z {}",
-                scene.camera().position.x.round(),
-                scene.camera().position.y.round(),
-                scene.camera().position.z.round(),
+                viewer.camera.position.x.round(),
+                viewer.camera.position.y.round(),
+                viewer.camera.position.z.round(),
             ));
             for (pass_name, is_enabled) in settings.pass_states.iter_mut() {
                 window_ui.checkbox(is_enabled, format!("{} pass", pass_name));
@@ -137,7 +137,7 @@ impl AppUi {
             window_ui.radio_value(&mut settings.debug_mode, 0, "None");
             window_ui.radio_value(&mut settings.debug_mode, 1, "Albedo");
             window_ui.radio_value(&mut settings.debug_mode, 2, "Normal");
-            window_ui.radio_value(&mut settings.debug_mode, 3, "PBR");
+            window_ui.radio_value(&mut settings.debug_mode, 3, "Metal/Rough");
             window_ui.radio_value(&mut settings.debug_mode, 4, "Depth");
 
             window_ui.heading("Models inspector");

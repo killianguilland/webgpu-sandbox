@@ -14,15 +14,14 @@ use crate::postprocess::hdr::Hdr;
 use crate::postprocess::visualizer::Visualizer;
 use crate::renderer::Renderer;
 use crate::resources;
-use crate::scenes::Scene;
-use crate::scenes::default_scene::DefaultScene;
+use crate::viewer::ModelViewer;
 use crate::{context::GraphicsContext, gbuffer::GBuffer};
 use crate::{gbuffer, passes::lightingpass::LightingPass};
 
 pub struct EngineState {
     pub context: GraphicsContext,
     pub renderer: Renderer,
-    pub scene: Box<dyn Scene>,
+    pub viewer: ModelViewer,
     pub resources: resources::ResourceManager,
     pub input: Input,
     pub hdr_visualizer: Hdr,
@@ -49,12 +48,12 @@ impl EngineState {
 
         let visualizer = Visualizer::new(&context.device, context.config.format, &gbuffer);
 
-        let scene = DefaultScene::new();
+        let viewer = ModelViewer::new();
 
-        for model_name in scene.required_models() {
+        for instance in &viewer.instances {
             resources
                 .load_model(
-                    model_name,
+                    &instance.model_name,
                     &context.device,
                     &context.queue,
                     &renderer.texture_bind_group_layout,
@@ -83,7 +82,7 @@ impl EngineState {
 
         resources
             .load_hdr_environment(
-                scene.skybox_path(),
+                &viewer.skybox_path,
                 &context.device,
                 &context.queue,
                 &renderer.environment_layout,
@@ -97,7 +96,7 @@ impl EngineState {
         Ok(Self {
             context,
             renderer,
-            scene: Box::new(scene),
+            viewer,
             resources,
             input: Input::new(),
             hdr_visualizer: hdr,
@@ -119,8 +118,8 @@ impl EngineState {
     }
 
     pub fn update(&mut self, dt: std::time::Duration) {
-        self.scene.update(dt, &mut self.input);
-        self.renderer.update(&self.context, self.scene.as_ref());
+        self.viewer.update(dt, &mut self.input);
+        self.renderer.update(&self.context, &self.viewer);
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -165,7 +164,7 @@ impl EngineState {
             &self.context,
             &self.hdr_visualizer.view(),
             &self.gbuffer,
-            self.scene.as_ref(),
+            &self.viewer,
             &self.resources,
             &mut encoder,
             &mut self.settings,
@@ -188,7 +187,7 @@ impl EngineState {
         let models = &self.resources.models;
         self.ui.draw(&self.context, &mut encoder, &view, |ui| {
             self.app_ui
-                .show(ui, self.scene.as_ref(), models, &mut self.settings);
+                .show(ui, &self.viewer, models, &mut self.settings);
         });
 
         self.context.queue.submit(std::iter::once(encoder.finish()));
@@ -286,6 +285,42 @@ impl ApplicationHandler<EngineState> for App {
             WindowEvent::ScaleFactorChanged { .. } => {
                 let size = state.context.window.inner_size();
                 state.resize(size.width, size.height);
+            }
+            WindowEvent::DroppedFile(path) => {
+                log::info!("Dropped file: {:?}", path);
+                let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                let path_str = path.to_string_lossy().to_string();
+
+                if extension == "obj" || extension == "gltf" || extension == "glb" {
+                    // Load the dropped model
+                    pollster::block_on(state.resources.load_model(
+                        &path_str,
+                        &state.context.device,
+                        &state.context.queue,
+                        &state.renderer.texture_bind_group_layout,
+                    ))
+                    .unwrap_or_else(|e| log::error!("Failed to load dropped model: {}", e));
+
+                    state.viewer.instances.clear();
+                    state.viewer.instances.push(crate::viewer::Instance {
+                        model_name: path_str,
+                        position: cgmath::Vector3::new(0.0, 0.0, 0.0),
+                        rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+                    });
+                } else if extension == "hdr" {
+                    // Load the dropped skybox environment map
+                    pollster::block_on(state.resources.load_hdr_environment(
+                        &path_str,
+                        &state.context.device,
+                        &state.context.queue,
+                        &state.renderer.environment_layout,
+                        1080,
+                        Some("Sky Texture"),
+                    ))
+                    .unwrap_or_else(|e| log::error!("Failed to load dropped HDR map: {}", e));
+
+                    state.viewer.skybox_path = path_str;
+                }
             }
             _ => {}
         }

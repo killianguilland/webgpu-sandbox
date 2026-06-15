@@ -1,6 +1,6 @@
 use crate::context::GraphicsContext;
 use crate::renderer::{RenderPass, Renderer, create_render_pipeline};
-use crate::scenes::Scene;
+use crate::viewer::ModelViewer;
 use crate::texture;
 
 pub struct SkyboxPass {
@@ -47,7 +47,7 @@ impl RenderPass for SkyboxPass {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
-        scene: &dyn Scene,
+        viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
@@ -78,8 +78,8 @@ impl RenderPass for SkyboxPass {
 
         // Fetch the environment bind group by the scene's skybox path
         let env_bg = resources
-            .get_bind_group(scene.skybox_path())
-            .expect("Environment map must be set before rendering SkyboxPass");
+            .get_bind_group(&viewer.skybox_path)
+            .expect("Skybox pass requires an environment map to be loaded");
 
         render_pass.set_pipeline(&self.render_pipeline);
         render_pass.set_bind_group(0, &renderer.camera_bind_group, &[]);

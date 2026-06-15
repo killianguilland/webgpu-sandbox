@@ -8,7 +8,7 @@ pub mod passes;
 pub mod postprocess;
 pub mod renderer;
 mod resources;
-pub mod scenes;
+pub mod viewer;
 pub mod settings;
 mod texture;
 mod ui;

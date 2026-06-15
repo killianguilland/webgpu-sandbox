@@ -2,7 +2,7 @@ use crate::context::GraphicsContext;
 use crate::model;
 use crate::model::Vertex;
 use crate::renderer::{RenderPass, Renderer};
-use crate::scenes::Scene;
+use crate::viewer::ModelViewer;
 
 pub struct GeometryPass {
     pub render_pipeline: wgpu::RenderPipeline,
@@ -103,7 +103,7 @@ impl RenderPass for GeometryPass {
         encoder: &mut wgpu::CommandEncoder,
         _view: &wgpu::TextureView, // not used cause we only draw to the gbuffer
         gbuffer: &crate::gbuffer::GBuffer,
-        scene: &dyn Scene,
+        viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
@@ -154,7 +154,7 @@ impl RenderPass for GeometryPass {
 
         render_pass.set_pipeline(&self.render_pipeline);
 
-        if let Some(env_bg) = resources.get_bind_group(scene.skybox_path()) {
+        if let Some(env_bg) = resources.get_bind_group(&viewer.skybox_path) {
             render_pass.set_bind_group(3, env_bg, &[]);
         }
 

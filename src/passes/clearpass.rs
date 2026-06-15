@@ -1,6 +1,6 @@
 use crate::context::GraphicsContext;
 use crate::renderer::{RenderPass, Renderer};
-use crate::scenes::Scene;
+use crate::viewer::ModelViewer;
 
 pub struct ClearPass;
 
@@ -14,7 +14,7 @@ impl RenderPass for ClearPass {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
-        _scene: &dyn Scene,
+        _viewer: &ModelViewer,
         _resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         _renderer: &Renderer,
@@ -41,7 +41,12 @@ impl RenderPass for ClearPass {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 0.2,
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                 }),

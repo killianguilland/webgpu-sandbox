@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::camera::{Camera, Projection};
 use crate::context::GraphicsContext;
-use crate::scenes::{Instance, Scene};
+use crate::viewer::{Instance, ModelViewer};
 use std::collections::HashMap;
 
 #[repr(C)]
@@ -184,7 +184,7 @@ pub trait RenderPass {
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
-        scene: &dyn Scene,
+        viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
@@ -411,16 +411,16 @@ impl Renderer {
         self.projection.resize(width, height);
     }
 
-    pub fn update(&mut self, context: &GraphicsContext, scene: &dyn Scene) {
+    pub fn update(&mut self, context: &GraphicsContext, viewer: &ModelViewer) {
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(scene.camera(), &self.projection);
+        camera_uniform.update_view_proj(&viewer.camera, &self.projection);
         context.queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[camera_uniform]),
         );
 
-        let lights = scene.lights();
+        let lights = &viewer.lights;
         if !lights.is_empty() {
             let light = &lights[0];
             let light_uniform = LightUniform {
@@ -437,19 +437,25 @@ impl Renderer {
         }
 
         let mut instances_by_model: HashMap<String, Vec<InstanceRaw>> = HashMap::new();
-        for instance in scene.instances() {
+        for instance in &viewer.instances {
             instances_by_model
                 .entry(instance.model_name.clone())
                 .or_default()
                 .push(instance.to_raw());
         }
 
+        // Reset all counts to 0 so we don't draw models that were removed from the viewer
+        for val in self.instance_buffers.values_mut() {
+            val.1 = 0;
+        }
+
         for (model_name, raw_instances) in instances_by_model {
             let instance_bytes = bytemuck::cast_slice(&raw_instances);
             // 2. Check if we already created a buffer for this model
-            if let Some((buffer, _count)) = self.instance_buffers.get(&model_name) {
+            if let Some((buffer, count)) = self.instance_buffers.get_mut(&model_name) {
                 // Buffer exists! Just overwrite the data. This is super fast.
                 context.queue.write_buffer(buffer, 0, instance_bytes);
+                *count = raw_instances.len() as u32;
             } else {
                 // Buffer doesn't exist yet (first frame). Create it!
                 let buffer = context
@@ -471,7 +477,7 @@ impl Renderer {
         context: &GraphicsContext,
         view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
-        scene: &dyn Scene,
+        viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
         encoder: &mut wgpu::CommandEncoder,
         settings: &crate::settings::RenderSettings,
@@ -483,7 +489,7 @@ impl Renderer {
                 }
             }
 
-            pass.render(encoder, view, gbuffer, scene, resources, context, self);
+            pass.render(encoder, view, gbuffer, viewer, resources, context, self);
         }
     }
 }
