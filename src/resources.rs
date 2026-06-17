@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 use image::codecs::hdr::HdrDecoder;
 
 use crate::{model, texture};
-use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps};
+use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps, texture::TextureData};
 
 use std::collections::HashMap;
 
@@ -109,6 +109,66 @@ impl ResourceManager {
         texture::Texture::from_bytes(device, queue, &data, file_name, is_linear)
     }
 
+    pub fn load_embedded_texture(
+        &self,
+        tex: &asset_importer::texture::Texture,
+        is_linear: bool,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> anyhow::Result<texture::Texture> {
+        match tex.data() {
+            Ok(asset_importer::texture::TextureData::Compressed(bytes)) => {
+                texture::Texture::from_bytes(device, queue, &bytes, "embedded", is_linear)
+            }
+            Ok(asset_importer::texture::TextureData::Texels(texels)) => {
+                let (width, height) = tex.dimensions();
+                let vec: Vec<u8> = texels
+                    .iter()
+                    .flat_map(|pixel| vec![pixel.r, pixel.g, pixel.b, pixel.a])
+                    .collect();
+                let image = image::RgbaImage::from_raw(width, height, vec).unwrap();
+                let dynamic_image = image::DynamicImage::ImageRgba8(image);
+                texture::Texture::from_image(
+                    device,
+                    queue,
+                    &dynamic_image,
+                    Some("embedded texture"),
+                    is_linear,
+                )
+            }
+            Err(e) => Err(anyhow::anyhow!("Embedded texture error: {:?}", e)),
+        }
+    }
+
+    pub async fn load_material_texture(
+        &self,
+        material: &asset_importer::material::Material,
+        scene: &asset_importer::scene::Scene,
+        types_to_try: &[TextureType],
+        is_linear: bool,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) -> anyhow::Result<Option<texture::Texture>> {
+        for &ty in types_to_try {
+            if material.texture_count(ty) > 0 {
+                let tex = material.texture(ty, 0).unwrap();
+                if tex.path.starts_with('*') {
+                    if let Ok(Some(embedded)) = scene.embedded_texture_by_name(&tex.path) {
+                        return Ok(Some(
+                            self.load_embedded_texture(&embedded, is_linear, device, queue)?,
+                        ));
+                    }
+                } else {
+                    return Ok(Some(
+                        self.load_texture(&tex.path, is_linear, device, queue)
+                            .await?,
+                    ));
+                }
+            }
+        }
+        Ok(None)
+    }
+
     pub async fn load_model(
         &mut self,
         file_name: &str,
@@ -145,56 +205,87 @@ impl ResourceManager {
             let name = m.name();
 
             // Recherche de la texture diffuse
-            let diffuse_texture = if m.texture_count(TextureType::Diffuse) > 0 {
-                let tex = m.texture(TextureType::Diffuse, 0).unwrap();
-                // tex.file contient le chemin de la texture (ex: "textures/diffuse.png")
-                // Ton helper load_texture va automatiquement le chercher dans "OUT_DIR/res/" !
-                self.load_texture(&tex.path, false, device, queue).await?
-            } else {
-                texture::Texture::fallback_diffuse(
+            let diffuse_texture = self
+                .load_material_texture(
+                    &m,
+                    &scene,
+                    &[TextureType::BaseColor, TextureType::Diffuse],
+                    false,
                     device,
                     queue,
-                    Some(&format!("{}::diffuse_fallback", name)),
-                )?
-            };
+                )
+                .await?
+                .unwrap_or_else(|| {
+                    texture::Texture::fallback_diffuse(
+                        device,
+                        queue,
+                        Some(&format!("{}::diffuse_fallback", name)),
+                    )
+                    .unwrap()
+                });
 
             // Recherche de la texture de normales ou de bump
-            let normal_texture = if m.texture_count(TextureType::Normals) > 0 {
-                let tex = m.texture(TextureType::Normals, 0).unwrap();
-                self.load_texture(&tex.path, true, device, queue).await?
-            } else if m.texture_count(TextureType::Height) > 0 {
-                let tex = m.texture(TextureType::Height, 0).unwrap();
-                self.load_texture(&tex.path, true, device, queue).await?
-            } else {
-                texture::Texture::fallback_normal(
+            let normal_texture = self
+                .load_material_texture(
+                    &m,
+                    &scene,
+                    &[TextureType::Normals, TextureType::Height],
+                    true,
                     device,
                     queue,
-                    Some(&format!("{}::normal_fallback", name)),
-                )?
-            };
+                )
+                .await?
+                .unwrap_or_else(|| {
+                    texture::Texture::fallback_normal(
+                        device,
+                        queue,
+                        Some(&format!("{}::normal_fallback", name)),
+                    )
+                    .unwrap()
+                });
 
-            // Recherche de la texture de normales ou de bump
-            let metalness_texture = if m.texture_count(TextureType::Metalness) > 0 {
-                let tex = m.texture(TextureType::Metalness, 0).unwrap();
-                self.load_texture(&tex.path, true, device, queue).await?
-            } else {
-                texture::Texture::fallback_metalness(
+            // Recherche de la texture metalness
+            let metalness_texture = self
+                .load_material_texture(
+                    &m,
+                    &scene,
+                    &[TextureType::Metalness, TextureType::GltfMetallicRoughness],
+                    true,
                     device,
                     queue,
-                    Some(&format!("{}::metalness_fallback", name)),
-                )?
-            };
+                )
+                .await?
+                .unwrap_or_else(|| {
+                    texture::Texture::fallback_metalness(
+                        device,
+                        queue,
+                        Some(&format!("{}::metalness_fallback", name)),
+                    )
+                    .unwrap()
+                });
 
-            let roughness_texture = if m.texture_count(TextureType::DiffuseRoughness) > 0 {
-                let tex = m.texture(TextureType::DiffuseRoughness, 0).unwrap();
-                self.load_texture(&tex.path, true, device, queue).await?
-            } else {
-                texture::Texture::fallback_roughness(
+            // Recherche de la texture roughness
+            let roughness_texture = self
+                .load_material_texture(
+                    &m,
+                    &scene,
+                    &[
+                        TextureType::DiffuseRoughness,
+                        TextureType::GltfMetallicRoughness,
+                    ],
+                    true,
                     device,
                     queue,
-                    Some(&format!("{}::metalness_fallback", name)),
-                )?
-            };
+                )
+                .await?
+                .unwrap_or_else(|| {
+                    texture::Texture::fallback_roughness(
+                        device,
+                        queue,
+                        Some(&format!("{}::roughness_fallback", name)),
+                    )
+                    .unwrap()
+                });
 
             materials.push(model::Material::new(
                 device,

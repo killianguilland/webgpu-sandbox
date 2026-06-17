@@ -27,7 +27,7 @@ impl Texture {
         queue: &wgpu::Queue,
         label: Option<&str>,
     ) -> Result<Self> {
-        Self::from_solid_rgba(device, queue, [0, 0, 0, 255], label, false)
+        Self::from_solid_rgba(device, queue, [100, 100, 100, 255], label, false)
     }
 
     pub fn fallback_normal(

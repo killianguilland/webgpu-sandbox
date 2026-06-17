@@ -141,7 +141,8 @@ impl AppUi {
             window_ui.radio_value(&mut settings.debug_mode, 4, "Depth");
 
             window_ui.heading("Models inspector");
-            for model_name in models.keys() {
+            for instance in &viewer.instances {
+                let model_name = &instance.model_name;
                 if window_ui.button(model_name).clicked() {
                     if self.open_windows.contains(model_name) {
                         self.open_windows.remove(model_name);
