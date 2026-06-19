@@ -151,7 +151,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     // Expand it from [0, 1] color space to [-1, 1] mathematical vector space
     let unpacked_normal = object_normal.xyz * 2.0 - 1.0;
-    
+
     let scaled_normal = vec3<f32>(
         unpacked_normal.x * material.mr_factors.z,
         unpacked_normal.y * material.mr_factors.z,
@@ -206,7 +206,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let kD = (vec3<f32>(1.0) - kS) * (1.0 - metallic);
     // 8. Final Lighting Math
     let NdotL = max(dot(N, L), 0.0);
-    let Lo = (kD * albedo.rgb / PI + specular) * radiance * NdotL;
+    let diffuse_light = (kD * albedo.rgb / PI) * radiance * NdotL;
+    let specular_light = specular * radiance * NdotL;
+    // let Lo = (kD * albedo.rgb / PI + specular) * radiance * NdotL;
     
     // 9. IBL (Image Based Lighting)
     // Calculate where the camera ray bounces off the surface
@@ -223,9 +225,14 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let kD_ibl = (vec3<f32>(1.0) - kS_ibl) * (1.0 - metallic);
 
     // Combine the diffuse ambient (darkened heavily) and the shiny skybox reflection!
-    let ambient = (kD_ibl * albedo.rgb * 0.03) + (reflection * kS_ibl);
+    // let ambient = (kD_ibl * albedo.rgb * 0.03) + (reflection * kS_ibl);
+    let diffuse_ambient = kD_ibl * albedo.rgb * 0.03;
+    let specular_ambient = reflection * kS_ibl;
 
-    let lit_color = ambient + Lo;
+    // 10. PRE-MULTIPLY ALPHA!
+    let final_diffuse = (diffuse_light + diffuse_ambient) * albedo.a;
+    let final_specular = specular_light + specular_ambient;
 
+    let lit_color = final_diffuse + final_specular;
     return vec4<f32>(lit_color, albedo.a);
 }
