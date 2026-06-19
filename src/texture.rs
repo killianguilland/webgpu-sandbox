@@ -19,7 +19,7 @@ impl Texture {
     ) -> Result<Self> {
         let img =
             image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(1, 1, image::Rgba(rgba)));
-        Self::from_image(device, queue, &img, label, is_linear)
+        Self::from_image(device, queue, &img, label, is_linear, [wgpu::AddressMode::Repeat; 3])
     }
 
     pub fn fallback_diffuse(
@@ -60,9 +60,10 @@ impl Texture {
         bytes: &[u8],
         label: &str,
         is_linear: bool,
+        address_modes: [wgpu::AddressMode; 3],
     ) -> Result<Self> {
         let img = image::load_from_memory(bytes)?;
-        Self::from_image(device, queue, &img, Some(label), is_linear)
+        Self::from_image(device, queue, &img, Some(label), is_linear, address_modes)
     }
 
     pub fn from_image(
@@ -71,6 +72,7 @@ impl Texture {
         img: &image::DynamicImage,
         label: Option<&str>,
         is_linear: bool,
+        address_modes: [wgpu::AddressMode; 3],
     ) -> Result<Self> {
         let format = if is_linear {
             wgpu::TextureFormat::Rgba8Unorm
@@ -115,9 +117,9 @@ impl Texture {
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            address_mode_u: wgpu::AddressMode::Repeat,
-            address_mode_v: wgpu::AddressMode::Repeat,
-            address_mode_w: wgpu::AddressMode::Repeat,
+            address_mode_u: address_modes[0],
+            address_mode_v: address_modes[1],
+            address_mode_w: address_modes[2],
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,

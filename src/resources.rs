@@ -9,6 +9,16 @@ use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps};
 
 use std::collections::HashMap;
 
+fn map_address_mode(mode: asset_importer::material::TextureMapMode) -> wgpu::AddressMode {
+    match mode {
+        asset_importer::material::TextureMapMode::Wrap => wgpu::AddressMode::Repeat,
+        asset_importer::material::TextureMapMode::Clamp => wgpu::AddressMode::ClampToEdge,
+        asset_importer::material::TextureMapMode::Mirror => wgpu::AddressMode::MirrorRepeat,
+        asset_importer::material::TextureMapMode::Decal => wgpu::AddressMode::ClampToEdge,
+        asset_importer::material::TextureMapMode::Other(_) => wgpu::AddressMode::Repeat,
+    }
+}
+
 pub struct ResourceManager {
     pub models: HashMap<String, model::Model>,
     pub cube_textures: HashMap<String, texture::CubeTexture>,
@@ -104,9 +114,10 @@ impl ResourceManager {
         is_linear: bool,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        address_modes: [wgpu::AddressMode; 3],
     ) -> anyhow::Result<texture::Texture> {
         let data = self.load_binary(file_name).await?;
-        texture::Texture::from_bytes(device, queue, &data, file_name, is_linear)
+        texture::Texture::from_bytes(device, queue, &data, file_name, is_linear, address_modes)
     }
 
     pub fn load_embedded_texture(
@@ -115,10 +126,11 @@ impl ResourceManager {
         is_linear: bool,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        address_modes: [wgpu::AddressMode; 3],
     ) -> anyhow::Result<texture::Texture> {
         match tex.data() {
             Ok(asset_importer::texture::TextureData::Compressed(bytes)) => {
-                texture::Texture::from_bytes(device, queue, &bytes, "embedded", is_linear)
+                texture::Texture::from_bytes(device, queue, &bytes, "embedded", is_linear, address_modes)
             }
             Ok(asset_importer::texture::TextureData::Texels(texels)) => {
                 let (width, height) = tex.dimensions();
@@ -134,6 +146,7 @@ impl ResourceManager {
                     &dynamic_image,
                     Some("embedded texture"),
                     is_linear,
+                    address_modes,
                 )
             }
             Err(e) => Err(anyhow::anyhow!("Embedded texture error: {:?}", e)),
@@ -151,16 +164,21 @@ impl ResourceManager {
     ) -> anyhow::Result<Option<texture::Texture>> {
         for &ty in types_to_try {
             if material.texture_count(ty) > 0 {
-                let tex = material.texture(ty, 0).unwrap();
-                if tex.path.starts_with('*') {
-                    if let Ok(Some(embedded)) = scene.embedded_texture_by_name(&tex.path) {
+                let tex_info = material.texture(ty, 0).unwrap();
+                let address_modes = [
+                    map_address_mode(tex_info.map_modes[0]),
+                    map_address_mode(tex_info.map_modes[1]),
+                    map_address_mode(tex_info.map_modes[2]),
+                ];
+                if tex_info.path.starts_with('*') {
+                    if let Ok(Some(embedded)) = scene.embedded_texture_by_name(&tex_info.path) {
                         return Ok(Some(
-                            self.load_embedded_texture(&embedded, is_linear, device, queue)?,
+                            self.load_embedded_texture(&embedded, is_linear, device, queue, address_modes)?,
                         ));
                     }
                 } else {
                     return Ok(Some(
-                        self.load_texture(&tex.path, is_linear, device, queue)
+                        self.load_texture(&tex_info.path, is_linear, device, queue, address_modes)
                             .await?,
                     ));
                 }
