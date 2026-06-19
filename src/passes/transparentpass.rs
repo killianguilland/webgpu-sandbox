@@ -4,15 +4,15 @@ use crate::model::Vertex;
 use crate::renderer::{RenderPass, Renderer};
 use crate::viewer::ModelViewer;
 
-pub struct GeometryPass {
+pub struct TransparentPass {
     pub render_pipeline: wgpu::RenderPipeline,
 }
 
-impl GeometryPass {
+impl TransparentPass {
     pub fn new(
         context: &GraphicsContext,
         renderer: &Renderer,
-        _hdr_format: wgpu::TextureFormat,
+        hdr_format: wgpu::TextureFormat,
     ) -> Self {
         let render_pipeline_layout =
             context
@@ -31,15 +31,17 @@ impl GeometryPass {
         let shader = context
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
-                label: Some("Opaque Shader"),
-                source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/geometry.wgsl").into()),
+                label: Some("Transparent Shader"),
+                source: wgpu::ShaderSource::Wgsl(
+                    include_str!("../shaders/transparent.wgsl").into(),
+                ),
             });
 
         let render_pipeline =
             context
                 .device
                 .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                    label: Some("Geometry Pipeline"),
+                    label: Some("Transparent Pipeline"),
                     layout: Some(&render_pipeline_layout),
                     vertex: wgpu::VertexState {
                         module: &shader,
@@ -53,23 +55,11 @@ impl GeometryPass {
                     fragment: Some(wgpu::FragmentState {
                         module: &shader,
                         entry_point: Some("fs_main"),
-                        targets: &[
-                            Some(wgpu::ColorTargetState {
-                                format: crate::gbuffer::GBuffer::ALBEDO_FORMAT,
-                                blend: None,
-                                write_mask: wgpu::ColorWrites::ALL,
-                            }),
-                            Some(wgpu::ColorTargetState {
-                                format: crate::gbuffer::GBuffer::NORMAL_FORMAT,
-                                blend: None,
-                                write_mask: wgpu::ColorWrites::ALL,
-                            }),
-                            Some(wgpu::ColorTargetState {
-                                format: crate::gbuffer::GBuffer::PBR_FORMAT,
-                                blend: None,
-                                write_mask: wgpu::ColorWrites::ALL,
-                            }),
-                        ],
+                        targets: &[Some(wgpu::ColorTargetState {
+                            format: hdr_format,
+                            blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                            write_mask: wgpu::ColorWrites::ALL,
+                        })],
                         compilation_options: Default::default(),
                     }),
                     primitive: wgpu::PrimitiveState {
@@ -79,7 +69,7 @@ impl GeometryPass {
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
                         format: crate::gbuffer::GBuffer::DEPTH_FORMAT,
-                        depth_write_enabled: Some(true),
+                        depth_write_enabled: Some(false),
                         depth_compare: Some(wgpu::CompareFunction::Less),
                         stencil: wgpu::StencilState::default(),
                         bias: wgpu::DepthBiasState::default(),
@@ -93,15 +83,15 @@ impl GeometryPass {
     }
 }
 
-impl RenderPass for GeometryPass {
+impl RenderPass for TransparentPass {
     fn name(&self) -> &str {
-        "Geometry"
+        "Transparent"
     }
 
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        _view: &wgpu::TextureView, // not used cause we only draw to the gbuffer
+        view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
         viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
@@ -109,36 +99,16 @@ impl RenderPass for GeometryPass {
         renderer: &Renderer,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Geometry Render Pass"),
-            color_attachments: &[
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &gbuffer.albedo.view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                }),
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &gbuffer.normal.view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                }),
-                Some(wgpu::RenderPassColorAttachment {
-                    view: &gbuffer.pbr.view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
-                        store: wgpu::StoreOp::Store,
-                    },
-                }),
-            ],
+            label: Some("Transparent Render Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: view,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &gbuffer.depth.view,
                 depth_ops: Some(wgpu::Operations {
@@ -168,7 +138,7 @@ impl RenderPass for GeometryPass {
                     0..*count,
                     &renderer.camera_bind_group,
                     &renderer.light_bind_group,
-                    false,
+                    true,
                 );
             }
         }

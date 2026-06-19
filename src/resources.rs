@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 use image::codecs::hdr::HdrDecoder;
 
 use crate::{model, texture};
-use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps, texture::TextureData};
+use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps};
 
 use std::collections::HashMap;
 
@@ -199,12 +199,10 @@ impl ResourceManager {
             })
             .map_err(|e| anyhow::anyhow!("Assimp error during loading : {:?}", e))?;
 
-        // 3. Chargement des matériaux
         let mut materials = Vec::new();
         for m in scene.materials() {
             let name = m.name();
 
-            // Recherche de la texture diffuse
             let diffuse_texture = self
                 .load_material_texture(
                     &m,
@@ -224,7 +222,6 @@ impl ResourceManager {
                     .unwrap()
                 });
 
-            // Recherche de la texture de normales ou de bump
             let normal_texture = self
                 .load_material_texture(
                     &m,
@@ -244,7 +241,6 @@ impl ResourceManager {
                     .unwrap()
                 });
 
-            // Recherche de la texture metalness
             let metalness_texture = self
                 .load_material_texture(
                     &m,
@@ -264,7 +260,6 @@ impl ResourceManager {
                     .unwrap()
                 });
 
-            // Recherche de la texture roughness
             let roughness_texture = self
                 .load_material_texture(
                     &m,
@@ -287,6 +282,49 @@ impl ResourceManager {
                     .unwrap()
                 });
 
+            let is_transparent = m.texture_count(TextureType::Opacity) > 0
+                || matches!(
+                    m.blend_mode(),
+                    Some(
+                        asset_importer::material::BlendMode::Default
+                            | asset_importer::material::BlendMode::Additive
+                    )
+                )
+                || m.opacity().unwrap_or(1.0) < 1.0;
+
+            let base_color = m
+                .base_color()
+                .map(|c| [c.x, c.y, c.z, c.w])
+                .unwrap_or([1.0, 1.0, 1.0, 1.0]);
+            let opacity = m.opacity().unwrap_or(1.0);
+
+            let emissive = m
+                .emissive_color()
+                .map(|c| [c.x, c.y, c.z])
+                .unwrap_or([0.0, 0.0, 0.0]);
+            let emissive_strength = m.emissive_intensity().unwrap_or(1.0);
+
+            let uniforms = model::MaterialUniform {
+                base_color_factor: [
+                    base_color[0],
+                    base_color[1],
+                    base_color[2],
+                    base_color[3] * opacity,
+                ],
+                emissive_occlusion: [
+                    emissive[0] * emissive_strength,
+                    emissive[1] * emissive_strength,
+                    emissive[2] * emissive_strength,
+                    1.0,
+                ],
+                mr_factors: [
+                    m.metallic_factor().unwrap_or(1.0),
+                    m.roughness_factor().unwrap_or(1.0),
+                    m.bump_scaling().unwrap_or(1.0),
+                    0.5,
+                ],
+            };
+
             materials.push(model::Material::new(
                 device,
                 &name,
@@ -295,6 +333,8 @@ impl ResourceManager {
                 roughness_texture,
                 metalness_texture,
                 layout,
+                is_transparent,
+                uniforms,
             ));
         }
 

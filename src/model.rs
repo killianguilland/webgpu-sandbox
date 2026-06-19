@@ -1,6 +1,7 @@
 use std::ops::Range;
 
 use crate::texture;
+use wgpu::util::DeviceExt;
 
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
@@ -58,6 +59,16 @@ pub struct Model {
     pub materials: Vec<Material>,
 }
 
+#[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MaterialUniform {
+    pub base_color_factor: [f32; 4],
+    // [Emissive R, Emissive G, Emissive B, Occlusion Strength]
+    pub emissive_occlusion: [f32; 4],
+    // [Metallic Factor, Roughness Factor, Normal Scale, Alpha Cutoff]
+    pub mr_factors: [f32; 4],
+}
+
 pub struct Material {
     #[allow(unused)]
     pub name: String,
@@ -69,7 +80,10 @@ pub struct Material {
     pub metalness_texture: texture::Texture,
     #[allow(unused)]
     pub roughness_texture: texture::Texture,
+    pub uniforms: MaterialUniform,
+    pub uniform_buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
+    pub is_transparent: bool,
 }
 
 impl Material {
@@ -81,7 +95,15 @@ impl Material {
         metalness_texture: texture::Texture,
         roughness_texture: texture::Texture,
         layout: &wgpu::BindGroupLayout,
+        is_transparent: bool,
+        uniforms: MaterialUniform,
     ) -> Self {
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{:?} Uniforms", name)),
+            contents: bytemuck::cast_slice(&[uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout,
             entries: &[
@@ -117,6 +139,10 @@ impl Material {
                     binding: 7,
                     resource: wgpu::BindingResource::Sampler(&roughness_texture.sampler),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: uniform_buffer.as_entire_binding(),
+                },
             ],
             label: Some(name),
         });
@@ -128,6 +154,9 @@ impl Material {
             roughness_texture,
             metalness_texture,
             bind_group,
+            is_transparent,
+            uniforms,
+            uniform_buffer,
         }
     }
 }
@@ -173,15 +202,13 @@ pub trait DrawModel<'a> {
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
     );
-
-    #[allow(unused)]
-    fn draw_model_instanced_with_material(
+    fn draw_model_instanced_filtered(
         &mut self,
         model: &'a Model,
-        material: &'a Material,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
+        is_transparent_pass: bool,
     );
 }
 
@@ -243,22 +270,25 @@ where
         }
     }
 
-    fn draw_model_instanced_with_material(
+    fn draw_model_instanced_filtered(
         &mut self,
-        model: &'b Model,
-        material: &'b Material,
+        model: &'a Model,
         instances: Range<u32>,
-        camera_bind_group: &'b wgpu::BindGroup,
-        light_bind_group: &'b wgpu::BindGroup,
+        camera_bind_group: &'a wgpu::BindGroup,
+        light_bind_group: &'a wgpu::BindGroup,
+        is_transparent_pass: bool,
     ) {
         for mesh in &model.meshes {
-            self.draw_mesh_instanced(
-                mesh,
-                material,
-                instances.clone(),
-                camera_bind_group,
-                light_bind_group,
-            );
+            let material = &model.materials[mesh.material];
+            if material.is_transparent == is_transparent_pass {
+                self.draw_mesh_instanced(
+                    mesh,
+                    material,
+                    instances.clone(),
+                    camera_bind_group,
+                    light_bind_group,
+                );
+            }
         }
     }
 }

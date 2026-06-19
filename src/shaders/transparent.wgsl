@@ -76,6 +76,39 @@ fn vs_main(
     return out;
 }
 
+const PI: f32 = 3.14159265359;
+
+// D: Normal Distribution (GGX)
+fn DistributionGGX(N: vec3<f32>, H: vec3<f32>, roughness: f32) -> f32 {
+    let a = roughness * roughness;
+    let a2 = a * a;
+    let NdotH = max(dot(N, H), 0.0);
+    let NdotH2 = NdotH * NdotH;
+    let num = a2;
+    let denom = (NdotH2 * (a2 - 1.0) + 1.0);
+    return num / (PI * denom * denom);
+}
+// G: Geometry Shadowing (Schlick-GGX)
+fn GeometrySchlickGGX(NdotV: f32, roughness: f32) -> f32 {
+    let r = (roughness + 1.0);
+    let k = (r * r) / 8.0;
+    let num = NdotV;
+    let denom = NdotV * (1.0 - k) + k;
+    return num / denom;
+}
+fn GeometrySmith(N: vec3<f32>, V: vec3<f32>, L: vec3<f32>, roughness: f32) -> f32 {
+    let NdotV = max(dot(N, V), 0.0);
+    let NdotL = max(dot(N, L), 0.0);
+    let ggx2 = GeometrySchlickGGX(NdotV, roughness);
+    let ggx1 = GeometrySchlickGGX(NdotL, roughness);
+    return ggx1 * ggx2;
+}
+// F: Fresnel Reflectance (Schlick's approximation)
+fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+
 // Fragment shader
 
 @group(0) @binding(0) var t_diffuse: texture_2d<f32>;
@@ -101,16 +134,13 @@ var env_map: texture_cube<f32>;
 @binding(1)
 var env_sampler: sampler;
 
-struct GBufferOutput {
-    @location(0) albedo: vec4<f32>,
-    @location(1) normal: vec4<f32>,
-    @location(2) pbr: vec2<f32>,
-};
-
 @fragment
-fn fs_main(in: VertexOutput) -> GBufferOutput {
+fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ALBEDO
     let albedo = textureSample(t_diffuse, s_diffuse, in.tex_coords) * material.base_color_factor;
+
+    // Optional: If it's effectively invisible, don't waste GPU cycles
+    //if albedo.a < 0.01 { discard; }
 
     // NORMAL
     //let normal = vec4<f32>(normalize(in.world_normal), 1.0); // This is the triangle's normal (without the normal map texture)
@@ -150,7 +180,52 @@ fn fs_main(in: VertexOutput) -> GBufferOutput {
     // PBR
     let metallic = textureSample(t_metallic, s_metallic, in.tex_coords).b * material.mr_factors.x;
     let roughness = textureSample(t_roughness, s_roughness, in.tex_coords).g * material.mr_factors.y;
-    let pbr = vec2<f32>(metallic, roughness);
 
-    return GBufferOutput(albedo, normal_out, pbr);
+    // 3. PBR Vectors
+    let N = final_world_normal; // Normal Vector
+    let V = normalize(camera.view_pos.xyz - in.world_position.xyz); // View Vector
+    let L = normalize(light.position - in.world_position.xyz); // Light Vector
+    let H = normalize(V + L); // Halfway Vector
+    // 4. Base Reflectivity (F0)
+    // Non-metals use 0.04, metals use their Albedo color
+    var F0 = vec3<f32>(0.04);
+    F0 = mix(F0, albedo.rgb, metallic);
+    // 5. Light Radiance (Inverse Square Law)
+    let distance = length(light.position - in.world_position.xyz);
+    let attenuation = 1.0 / (distance * distance);
+    let radiance = light.color * attenuation;
+    // 6. The Cook-Torrance BRDF Equation!
+    let NDF = DistributionGGX(N, H, roughness);   
+    let G   = GeometrySmith(N, V, L, roughness);      
+    let F   = fresnelSchlick(max(dot(H, V), 0.0), F0);       
+    let numerator    = NDF * G * F;
+    let denominator  = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+    let specular     = numerator / denominator;
+    // 7. Energy Conservation
+    let kS = F;
+    let kD = (vec3<f32>(1.0) - kS) * (1.0 - metallic);
+    // 8. Final Lighting Math
+    let NdotL = max(dot(N, L), 0.0);
+    let Lo = (kD * albedo.rgb / PI + specular) * radiance * NdotL;
+    
+    // 9. IBL (Image Based Lighting)
+    // Calculate where the camera ray bounces off the surface
+    let R = reflect(-V, N);
+
+    // Sample the skybox! The rougher the surface, the higher the Mipmap level (blurrier)
+    let max_reflection_lod = 8.0; 
+    let reflection = textureSampleLevel(env_map, env_sampler, R, roughness * max_reflection_lod).rgb;
+
+    // How much light bounces off like a mirror? (F0 is our base reflectivity)
+    let kS_ibl = F0;
+
+    // How much light gets absorbed and becomes diffuse color?
+    let kD_ibl = (vec3<f32>(1.0) - kS_ibl) * (1.0 - metallic);
+
+    // Combine the diffuse ambient (darkened heavily) and the shiny skybox reflection!
+    let ambient = (kD_ibl * albedo.rgb * 0.03) + (reflection * kS_ibl);
+
+    let lit_color = ambient + Lo;
+
+    return vec4<f32>(lit_color, albedo.a);
 }

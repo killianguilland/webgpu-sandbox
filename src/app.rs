@@ -8,7 +8,6 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::input::Input;
 use crate::passes::{ClearPass, GeometryPass, GizmoPass, SkyboxPass};
 use crate::postprocess::hdr::Hdr;
 use crate::postprocess::visualizer::Visualizer;
@@ -17,6 +16,7 @@ use crate::resources;
 use crate::viewer::ModelViewer;
 use crate::{context::GraphicsContext, gbuffer::GBuffer};
 use crate::{gbuffer, passes::lightingpass::LightingPass};
+use crate::{input::Input, passes::TransparentPass};
 
 pub struct EngineState {
     pub context: GraphicsContext,
@@ -79,6 +79,13 @@ impl EngineState {
             hdr.format(),
         )));
         settings.pass_states.insert("Lighting".to_string(), true);
+
+        renderer.add_pass(Box::new(TransparentPass::new(
+            &context,
+            &renderer,
+            hdr.format(),
+        )));
+        settings.pass_states.insert("Transparent".to_string(), true);
 
         resources
             .load_hdr_environment(
