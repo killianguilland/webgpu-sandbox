@@ -8,7 +8,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::passes::{ClearPass, GeometryPass, GizmoPass, SkyboxPass};
+use crate::passes::{ClearPass, GeometryPass, GizmoPass, SkyboxPass, SsaoPass};
 use crate::postprocess::hdr::Hdr;
 use crate::postprocess::visualizer::Visualizer;
 use crate::renderer::Renderer;
@@ -72,6 +72,8 @@ impl EngineState {
             hdr.format(),
         )));
         settings.pass_states.insert("Geometry".to_string(), true);
+        renderer.add_pass(Box::new(SsaoPass::new(&context, &renderer, &gbuffer)));
+        settings.pass_states.insert("SSAO".to_string(), true);
         renderer.add_pass(Box::new(LightingPass::new(
             &context,
             &renderer,

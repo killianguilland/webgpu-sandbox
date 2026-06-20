@@ -19,7 +19,34 @@ impl Texture {
     ) -> Result<Self> {
         let img =
             image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(1, 1, image::Rgba(rgba)));
-        Self::from_image(device, queue, &img, label, is_linear, [wgpu::AddressMode::Repeat; 3])
+        Self::from_image(
+            device,
+            queue,
+            &img,
+            label,
+            is_linear,
+            [wgpu::AddressMode::Repeat; 3],
+        )
+    }
+
+    pub fn from_raw_rgba(
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        bytes: &[u8],
+        width: u32,
+        height: u32,
+        label: Option<&str>,
+    ) -> Result<Self> {
+        let img_buf = image::RgbaImage::from_raw(width, height, bytes.to_vec()).unwrap();
+        let img = image::DynamicImage::ImageRgba8(img_buf);
+        Self::from_image(
+            device,
+            queue,
+            &img,
+            label,
+            true,
+            [wgpu::AddressMode::Repeat; 3],
+        )
     }
 
     pub fn fallback_diffuse(
