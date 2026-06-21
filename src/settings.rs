@@ -3,12 +3,14 @@ pub struct RenderSettings {
     // Maps a pass name to its enabled/disabled state
     pub pass_states: HashMap<String, bool>,
     pub debug_mode: u32,
+    pub animate_light: bool,
 }
 impl RenderSettings {
     pub fn new() -> Self {
         Self {
             pass_states: HashMap::new(),
             debug_mode: 0,
+            animate_light: true,
         }
     }
     pub fn is_pass_enabled(&self, name: &str) -> bool {

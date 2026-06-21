@@ -133,12 +133,12 @@ impl RenderPass for TransparentPass {
             // If this model is loaded, draw it!
             if let Some(model) = resources.get_model(model_name) {
                 render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
-                render_pass.draw_model_instanced_filtered(
+                render_pass.draw_model_instanced(
                     model,
                     0..*count,
                     &renderer.camera_bind_group,
                     &renderer.light_bind_group,
-                    true,
+                    crate::model::MeshFilter::TransparentsOnly,
                 );
             }
         }

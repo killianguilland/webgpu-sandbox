@@ -15,7 +15,12 @@ pub struct Visualizer {
 }
 
 impl Visualizer {
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat, gbuffer: &GBuffer) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        gbuffer: &GBuffer,
+        renderer: &crate::renderer::Renderer,
+    ) -> Self {
         let settings_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Visualizer Settings Buffer"),
             contents: bytemuck::cast_slice(&[SettingsUniform {
@@ -51,7 +56,11 @@ impl Visualizer {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Visualizer Pipeline Layout"),
-            bind_group_layouts: &[Some(&gbuffer.layout), Some(&settings_bind_group_layout)],
+            bind_group_layouts: &[
+                Some(&gbuffer.layout), 
+                Some(&settings_bind_group_layout),
+                Some(&renderer.blur_target.bind_group_layout),
+            ],
             immediate_size: 0,
         });
 
@@ -103,6 +112,7 @@ impl Visualizer {
         output: &wgpu::TextureView,
         gbuffer: &GBuffer,
         queue: &wgpu::Queue,
+        renderer: &crate::renderer::Renderer,
         mode: u32,
     ) {
         // Update the uniform
@@ -134,6 +144,7 @@ impl Visualizer {
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &gbuffer.bind_group, &[]);
         pass.set_bind_group(1, &self.settings_bind_group, &[]);
+        pass.set_bind_group(2, &renderer.blur_target.bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

@@ -3,6 +3,13 @@ use std::ops::Range;
 use crate::texture;
 use wgpu::util::DeviceExt;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MeshFilter {
+    All,
+    TransparentsOnly,
+    OpaqueOnly,
+}
+
 pub trait Vertex {
     fn desc() -> wgpu::VertexBufferLayout<'static>;
 }
@@ -188,27 +195,27 @@ pub trait DrawModel<'a> {
         light_bind_group: &'a wgpu::BindGroup,
     );
 
-    #[allow(unused)]
-    fn draw_model(
-        &mut self,
-        model: &'a Model,
-        camera_bind_group: &'a wgpu::BindGroup,
-        light_bind_group: &'a wgpu::BindGroup,
-    );
+    // fn draw_model(
+    //     &mut self,
+    //     model: &'a Model,
+    //     camera_bind_group: &'a wgpu::BindGroup,
+    //     light_bind_group: &'a wgpu::BindGroup,
+    // );
+    // fn draw_model_instanced(
+    //     &mut self,
+    //     model: &'a Model,
+    //     instances: Range<u32>,
+    //     camera_bind_group: &'a wgpu::BindGroup,
+    //     light_bind_group: &'a wgpu::BindGroup,
+    // );
+
     fn draw_model_instanced(
         &mut self,
         model: &'a Model,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
-    );
-    fn draw_model_instanced_filtered(
-        &mut self,
-        model: &'a Model,
-        instances: Range<u32>,
-        camera_bind_group: &'a wgpu::BindGroup,
-        light_bind_group: &'a wgpu::BindGroup,
-        is_transparent_pass: bool,
+        mesh_filter: MeshFilter,
     );
 }
 
@@ -242,45 +249,52 @@ where
         self.draw_indexed(0..mesh.num_elements, 0, instances);
     }
 
-    fn draw_model(
-        &mut self,
-        model: &'b Model,
-        camera_bind_group: &'b wgpu::BindGroup,
-        light_bind_group: &'b wgpu::BindGroup,
-    ) {
-        self.draw_model_instanced(model, 0..1, camera_bind_group, light_bind_group);
-    }
+    // fn draw_model(
+    //     &mut self,
+    //     model: &'b Model,
+    //     camera_bind_group: &'b wgpu::BindGroup,
+    //     light_bind_group: &'b wgpu::BindGroup,
+    // ) {
+    //     self.draw_model_instanced(model, 0..1, camera_bind_group, light_bind_group);
+    // }
+
+    // fn draw_model_instanced(
+    //     &mut self,
+    //     model: &'b Model,
+    //     instances: Range<u32>,
+    //     camera_bind_group: &'b wgpu::BindGroup,
+    //     light_bind_group: &'b wgpu::BindGroup,
+    // ) {
+    //     for mesh in &model.meshes {
+    //         let material = &model.materials[mesh.material];
+    //         self.draw_mesh_instanced(
+    //             mesh,
+    //             material,
+    //             instances.clone(),
+    //             camera_bind_group,
+    //             light_bind_group,
+    //         );
+    //     }
+    // }
 
     fn draw_model_instanced(
-        &mut self,
-        model: &'b Model,
-        instances: Range<u32>,
-        camera_bind_group: &'b wgpu::BindGroup,
-        light_bind_group: &'b wgpu::BindGroup,
-    ) {
-        for mesh in &model.meshes {
-            let material = &model.materials[mesh.material];
-            self.draw_mesh_instanced(
-                mesh,
-                material,
-                instances.clone(),
-                camera_bind_group,
-                light_bind_group,
-            );
-        }
-    }
-
-    fn draw_model_instanced_filtered(
         &mut self,
         model: &'a Model,
         instances: Range<u32>,
         camera_bind_group: &'a wgpu::BindGroup,
         light_bind_group: &'a wgpu::BindGroup,
-        is_transparent_pass: bool,
+        mesh_filter: MeshFilter,
     ) {
         for mesh in &model.meshes {
             let material = &model.materials[mesh.material];
-            if material.is_transparent == is_transparent_pass {
+            
+            let should_draw = match mesh_filter {
+                MeshFilter::All => true,
+                MeshFilter::TransparentsOnly => material.is_transparent,
+                MeshFilter::OpaqueOnly => !material.is_transparent,
+            };
+
+            if should_draw {
                 self.draw_mesh_instanced(
                     mesh,
                     material,

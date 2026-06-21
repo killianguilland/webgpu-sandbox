@@ -8,7 +8,7 @@ use winit::{
     window::{Window, WindowId},
 };
 
-use crate::passes::{ClearPass, GeometryPass, GizmoPass, SkyboxPass, SsaoPass};
+use crate::passes::{BlurPass, ClearPass, GeometryPass, GizmoPass, SkyboxPass, SsaoPass};
 use crate::postprocess::hdr::Hdr;
 use crate::postprocess::visualizer::Visualizer;
 use crate::renderer::Renderer;
@@ -46,8 +46,6 @@ impl EngineState {
 
         let gbuffer = gbuffer::GBuffer::new(&context.device, &context.config);
 
-        let visualizer = Visualizer::new(&context.device, context.config.format, &gbuffer);
-
         let viewer = ModelViewer::new();
 
         for instance in &viewer.instances {
@@ -72,14 +70,27 @@ impl EngineState {
             hdr.format(),
         )));
         settings.pass_states.insert("Geometry".to_string(), true);
-        renderer.add_pass(Box::new(SsaoPass::new(&context, &renderer, &gbuffer)));
-        settings.pass_states.insert("SSAO".to_string(), true);
-        renderer.add_pass(Box::new(LightingPass::new(
+        let ssao_pass = SsaoPass::new(&context, &renderer, &gbuffer);
+        let blur_pass = BlurPass::new(&context, &renderer);
+        let visualizer = Visualizer::new(
+            &context.device,
+            context.config.format,
+            &gbuffer,
+            &renderer,
+        );
+        let lighting_pass = LightingPass::new(
             &context,
             &renderer,
             &gbuffer,
             hdr.format(),
-        )));
+        );
+        // Now that everyone who needs to look at the texture is done,
+        // we can finally hand ownership of the passes over to the renderer!
+        renderer.add_pass(Box::new(ssao_pass));
+        settings.pass_states.insert("SSAO".to_string(), true);
+        renderer.add_pass(Box::new(blur_pass));
+        settings.pass_states.insert("Blur".to_string(), true);
+        renderer.add_pass(Box::new(lighting_pass));
         settings.pass_states.insert("Lighting".to_string(), true);
 
         renderer.add_pass(Box::new(TransparentPass::new(
@@ -119,7 +130,7 @@ impl EngineState {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.context.resize(width, height);
-        self.renderer.resize(width, height);
+        self.renderer.resize(&self.context.device, &self.context.config);
         self.hdr_visualizer
             .resize(&self.context.device, width, height);
         self.gbuffer
@@ -127,7 +138,7 @@ impl EngineState {
     }
 
     pub fn update(&mut self, dt: std::time::Duration) {
-        self.viewer.update(dt, &mut self.input);
+        self.viewer.update(dt, &mut self.input, self.settings.animate_light);
         self.renderer.update(&self.context, &self.viewer);
     }
 
@@ -187,6 +198,7 @@ impl EngineState {
                 &view,
                 &self.gbuffer,
                 &self.context.queue,
+                &self.renderer,
                 self.settings.debug_mode - 1,
             );
         } else {

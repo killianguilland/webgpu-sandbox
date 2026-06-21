@@ -133,12 +133,21 @@ impl AppUi {
                 window_ui.checkbox(is_enabled, format!("{} pass", pass_name));
             }
 
+            window_ui.separator();
+
+            window_ui.checkbox(&mut settings.animate_light, "Animate light");
+
+            window_ui.separator();
+
             window_ui.heading("G-Buffer visualizer");
             window_ui.radio_value(&mut settings.debug_mode, 0, "None");
             window_ui.radio_value(&mut settings.debug_mode, 1, "Albedo");
             window_ui.radio_value(&mut settings.debug_mode, 2, "Normal");
             window_ui.radio_value(&mut settings.debug_mode, 3, "Metal/Rough");
             window_ui.radio_value(&mut settings.debug_mode, 4, "Depth");
+            window_ui.radio_value(&mut settings.debug_mode, 5, "SSAO");
+
+            window_ui.separator();
 
             window_ui.heading("Models inspector");
             for instance in &viewer.instances {

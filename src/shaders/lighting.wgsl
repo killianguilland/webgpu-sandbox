@@ -73,6 +73,10 @@ struct Light {
 @group(3) @binding(0) var t_env: texture_cube<f32>;
 @group(3) @binding(1) var s_env: sampler;
 
+// Group 4: SSAO
+@group(4) @binding(0) var t_ssao: texture_2d<f32>;
+@group(4) @binding(1) var s_ssao: sampler;
+
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 1. Get the depth
@@ -139,9 +143,15 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // How much light gets absorbed and becomes diffuse color?
     let kD_ibl = (vec3<f32>(1.0) - kS_ibl) * (1.0 - metallic);
-
+    
     // Combine the diffuse ambient (darkened heavily) and the shiny skybox reflection!
-    let ambient = (kD_ibl * albedo * 0.03) + (reflection * kS_ibl);
+    let diffuse_ambient = kD_ibl * albedo * 0.03;
+    let specular_ambient = reflection * kS_ibl;
+    
+    // Sample SSAO from texture
+    let ssao_factor = textureSample(t_ssao, s_ssao, in.uv).r;
 
-    return vec4<f32>(ambient + Lo, 1.0);
+    let final_ambient = (diffuse_ambient * ssao_factor) + specular_ambient;
+
+    return vec4<f32>(final_ambient + Lo, 1.0);
 }

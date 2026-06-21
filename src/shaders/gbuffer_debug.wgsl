@@ -1,11 +1,8 @@
-// src/shaders/gbuffer_debug.wgsl
-
 // Your existing fullscreen quad vertex shader
 struct VertexOutput {
     @location(0) uv: vec2<f32>,
     @builtin(position) clip_position: vec4<f32>,
 };
-
 @vertex
 fn vs_main(
     @builtin(vertex_index) vi: u32,
@@ -22,20 +19,20 @@ fn vs_main(
     out.uv.y = 1.0 - out.uv.y;
     return out;
 }
-
 // Bind our entire GBuffer at Group 0!
 @group(0) @binding(0) var t_albedo: texture_2d<f32>;
 @group(0) @binding(1) var t_normal: texture_2d<f32>;
 @group(0) @binding(2) var t_pbr: texture_2d<f32>;
 @group(0) @binding(3) var t_depth: texture_depth_2d;
 @group(0) @binding(4) var s_sampler: sampler;
-
 // We will use a uniform buffer to tell the shader which texture to draw
 struct DebugSettings {
     mode: u32,
 }
 @group(1) @binding(0) var<uniform> settings: DebugSettings;
-
+// SSAO Texture
+@group(2) @binding(0) var t_ssao: texture_2d<f32>;
+@group(2) @binding(1) var s_ssao: sampler;
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     if (settings.mode == 0u) {
@@ -49,9 +46,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // PBR (R = Metallic, G = Roughness, B = 0)
         let pbr = textureSample(t_pbr, s_sampler, in.uv).rg;
         return vec4<f32>(pbr.r, pbr.g, 0.0, 1.0);
-    } else {
+    } else if (settings.mode == 3u) {
         // Depth
         let depth_val = textureLoad(t_depth, vec2<i32>(in.clip_position.xy), 0);
         return vec4<f32>(depth_val, depth_val, depth_val, 1.0);
+    } else {
+        // SSAO
+        let ssao = textureSample(t_ssao, s_ssao, in.uv).r;
+        return vec4<f32>(ssao, ssao, ssao, 1.0);
     }
 }

@@ -28,7 +28,6 @@ pub struct SsaoPass {
     pub pipeline: wgpu::RenderPipeline,
     pub noise_bind_group: wgpu::BindGroup,
     pub noise_texture: Texture,
-    pub ssao_texture: Texture,
 }
 
 impl SsaoPass {
@@ -97,13 +96,7 @@ impl SsaoPass {
             ],
         });
 
-        // 4. Create the SSAO output texture
-        let ssao_texture = Texture::create_render_target(
-            device,
-            &context.config,
-            wgpu::TextureFormat::R8Unorm,
-            "SSAO Output Texture",
-        );
+        // 4. (SSAO output texture is now in Renderer)
 
         // 5. Pipeline Layout (GBuffer + Camera + Noise)
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -157,7 +150,6 @@ impl SsaoPass {
             pipeline,
             noise_bind_group,
             noise_texture,
-            ssao_texture,
         }
     }
 }
@@ -180,7 +172,7 @@ impl RenderPass for SsaoPass {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("SSAO Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &self.ssao_texture.view, // Writing to our R8Unorm texture
+                view: &renderer.ssao_target.texture.view, // Writing to Renderer's target
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::WHITE), // 1.0 means no occlusion by default

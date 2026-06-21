@@ -160,15 +160,14 @@ impl RenderPass for GeometryPass {
 
         use crate::model::DrawModel;
         for (model_name, (instance_buffer, count)) in &renderer.instance_buffers {
-            // If this model is loaded, draw it!
             if let Some(model) = resources.get_model(model_name) {
                 render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
-                render_pass.draw_model_instanced_filtered(
+                render_pass.draw_model_instanced(
                     model,
                     0..*count,
                     &renderer.camera_bind_group,
                     &renderer.light_bind_group,
-                    false,
+                    crate::model::MeshFilter::OpaqueOnly,
                 );
             }
         }

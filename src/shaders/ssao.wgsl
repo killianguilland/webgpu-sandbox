@@ -54,6 +54,7 @@ const SSAO_KERNEL = array<vec4<f32>, 16>(
     vec4<f32>( 0.655, -0.711,  0.388, 0.0), vec4<f32>(-0.722, -0.655,  0.299, 0.0)
 );
 const ACNE_BIAS: f32 = 0.025;
+const POWER: f32 = 1.0;
 
 fn reconstruct_view_position(uv: vec2<f32>, depth: f32) -> vec3<f32> {
     // 1. Convert UV to Normalized Device Coordinates (-1 to 1)
@@ -119,7 +120,7 @@ fn reconstruct_view_position(uv: vec2<f32>, depth: f32) -> vec3<f32> {
         }
     }
     // Convert from [0, 16] to a [0.0, 1.0] ambient light multiplier
-    let ambient_light_factor = 1.0 - (occlusion / f32(KERNEL_SIZE));
+    let ambient_light_factor = pow(1.0 - (occlusion / f32(KERNEL_SIZE)), POWER);
     
     return vec4<f32>(vec3<f32>(ambient_light_factor), 1.0);
 }

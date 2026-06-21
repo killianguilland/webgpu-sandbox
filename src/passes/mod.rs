@@ -1,3 +1,4 @@
+pub mod blurpass;
 pub mod clearpass;
 pub mod geometrypass;
 pub mod gizmopass;
@@ -6,6 +7,7 @@ pub mod skyboxpass;
 pub mod ssaopass;
 pub mod transparentpass;
 
+pub use blurpass::BlurPass;
 pub use clearpass::ClearPass;
 pub use geometrypass::GeometryPass;
 pub use gizmopass::GizmoPass;

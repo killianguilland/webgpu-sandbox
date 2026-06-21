@@ -35,7 +35,10 @@ impl GraphicsContext {
                 label: None,
                 required_features: adapter.features() & wgpu::Features::all_webgpu_mask(),
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
-                required_limits: wgpu::Limits::defaults(),
+                required_limits: wgpu::Limits {
+                    max_bind_groups: 6,
+                    ..wgpu::Limits::default()
+                },
                 memory_hints: Default::default(),
                 trace: wgpu::Trace::Off,
             })

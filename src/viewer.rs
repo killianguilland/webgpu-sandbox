@@ -83,14 +83,14 @@ impl ModelViewer {
         }
     }
 
-    pub fn update(&mut self, dt: Duration, input: &mut Input) {
+    pub fn update(&mut self, dt: Duration, input: &mut Input, animate_light: bool) {
         self.camera_controller
             .update_camera(&mut self.camera, dt, input);
 
         self.time += dt.as_secs_f32();
 
         // Animate light
-        if !self.lights.is_empty() {
+        if animate_light && !self.lights.is_empty() {
             let old_position = self.lights[0].position;
             self.lights[0].position = cgmath::Quaternion::from_axis_angle(
                 Vector3::new(0.0, 1.0, 0.0),

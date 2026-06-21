@@ -212,6 +212,8 @@ pub struct Renderer {
     pub projection: Projection,
 
     passes: Vec<Box<dyn RenderPass>>,
+    pub ssao_target: crate::texture::RenderTarget,
+    pub blur_target: crate::texture::RenderTarget,
 }
 
 impl Renderer {
@@ -398,6 +400,9 @@ impl Renderer {
             100.0,
         );
 
+        let ssao_target = crate::texture::RenderTarget::new(&context.device, &context.config, wgpu::TextureFormat::R8Unorm, "SSAO Target");
+        let blur_target = crate::texture::RenderTarget::new(&context.device, &context.config, wgpu::TextureFormat::R8Unorm, "Blur Target");
+
         Self {
             camera_buffer,
             camera_bind_group_layout,
@@ -410,6 +415,8 @@ impl Renderer {
             instance_buffers: HashMap::new(),
             projection,
             passes: Vec::new(),
+            ssao_target,
+            blur_target,
         }
     }
 
@@ -417,8 +424,10 @@ impl Renderer {
         self.passes.push(pass);
     }
 
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.projection.resize(width, height);
+    pub fn resize(&mut self, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
+        self.projection.resize(config.width, config.height);
+        self.ssao_target.resize(device, config);
+        self.blur_target.resize(device, config);
     }
 
     pub fn update(&mut self, context: &GraphicsContext, viewer: &ModelViewer) {
