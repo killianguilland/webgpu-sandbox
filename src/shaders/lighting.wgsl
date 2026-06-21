@@ -151,7 +151,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Sample SSAO from texture
     let ssao_factor = textureSample(t_ssao, s_ssao, in.uv).r;
 
-    let final_ambient = (diffuse_ambient * ssao_factor) + specular_ambient;
+    let final_ambient = (diffuse_ambient + specular_ambient) * ssao_factor;
 
     return vec4<f32>(final_ambient + Lo, 1.0);
 }

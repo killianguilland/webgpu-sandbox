@@ -254,7 +254,7 @@ impl Renderer {
         let light_uniform = LightUniform {
             position: [2.0, 2.0, 2.0],
             _padding: 0,
-            color: [300.0, 300.0, 300.0],
+            color: [75.0, 75.0, 75.0],
             _padding2: 0,
         };
 
@@ -400,8 +400,18 @@ impl Renderer {
             100.0,
         );
 
-        let ssao_target = crate::texture::RenderTarget::new(&context.device, &context.config, wgpu::TextureFormat::R8Unorm, "SSAO Target");
-        let blur_target = crate::texture::RenderTarget::new(&context.device, &context.config, wgpu::TextureFormat::R8Unorm, "Blur Target");
+        let ssao_target = crate::texture::RenderTarget::new(
+            &context.device,
+            &context.config,
+            wgpu::TextureFormat::R8Unorm,
+            "SSAO Target",
+        );
+        let blur_target = crate::texture::RenderTarget::new(
+            &context.device,
+            &context.config,
+            wgpu::TextureFormat::R8Unorm,
+            "Blur Target",
+        );
 
         Self {
             camera_buffer,

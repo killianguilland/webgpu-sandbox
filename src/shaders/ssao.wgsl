@@ -41,7 +41,7 @@ struct CameraUniform {
 @group(2) @binding(1) var s_noise: sampler;
 
 // Our Hardcoded Settings!
-const RADIUS: f32 = 0.5;
+const RADIUS: f32 = 0.25;
 const KERNEL_SIZE: u32 = 16u;
 const SSAO_KERNEL = array<vec4<f32>, 16>(
     vec4<f32>( 0.052,  0.014,  0.084, 0.0), vec4<f32>(-0.065,  0.111,  0.158, 0.0),
@@ -54,7 +54,7 @@ const SSAO_KERNEL = array<vec4<f32>, 16>(
     vec4<f32>( 0.655, -0.711,  0.388, 0.0), vec4<f32>(-0.722, -0.655,  0.299, 0.0)
 );
 const ACNE_BIAS: f32 = 0.025;
-const POWER: f32 = 1.0;
+const POWER: f32 = 2.0;
 
 fn reconstruct_view_position(uv: vec2<f32>, depth: f32) -> vec3<f32> {
     // 1. Convert UV to Normalized Device Coordinates (-1 to 1)
