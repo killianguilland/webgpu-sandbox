@@ -52,8 +52,6 @@ impl EngineState {
 
         let viewer = ModelViewer::new();
 
-
-
         resources
             .load_model(
                 &viewer.model_name,
@@ -67,19 +65,26 @@ impl EngineState {
         let mut settings = crate::settings::RenderSettings::new();
         renderer.add_pass(Box::new(ClearPass));
         settings.pass_states.insert("Clear".to_string(), true);
-        renderer.add_pass(Box::new(GizmoPass::new(&context, &renderer, hdr.format())));
+        renderer.add_pass(Box::new(GizmoPass::new(
+            &context,
+            &renderer,
+            &settings,
+            hdr.format(),
+        )));
         settings.pass_states.insert("Gizmo".to_string(), true);
         renderer.add_pass(Box::new(GeometryPass::new(
             &context,
             &renderer,
+            &settings,
             hdr.format(),
         )));
         settings.pass_states.insert("Geometry".to_string(), true);
-        let ssao_pass = SsaoPass::new(&context, &renderer, &gbuffer);
+        let ssao_pass = SsaoPass::new(&context, &renderer, &settings, &gbuffer);
         let blur_pass = BlurPass::new(&context, &renderer);
         let visualizer =
             Visualizer::new(&context.device, context.config.format, &gbuffer, &renderer);
-        let lighting_pass = LightingPass::new(&context, &renderer, &gbuffer, hdr.format());
+        let lighting_pass =
+            LightingPass::new(&context, &renderer, &settings, &gbuffer, hdr.format());
         // Now that everyone who needs to look at the texture is done,
         // we can finally hand ownership of the passes over to the renderer!
         renderer.add_pass(Box::new(ssao_pass));
@@ -92,6 +97,7 @@ impl EngineState {
         renderer.add_pass(Box::new(TransparentPass::new(
             &context,
             &renderer,
+            &settings,
             hdr.format(),
         )));
         settings.pass_states.insert("Transparent".to_string(), true);
@@ -106,7 +112,12 @@ impl EngineState {
                 Some("Sky Texture"),
             )
             .await?;
-        renderer.add_pass(Box::new(SkyboxPass::new(&context, &renderer, hdr.format())));
+        renderer.add_pass(Box::new(SkyboxPass::new(
+            &context,
+            &renderer,
+            &settings,
+            hdr.format(),
+        )));
         settings.pass_states.insert("Skybox".to_string(), true);
 
         Ok(Self {
@@ -207,6 +218,8 @@ impl EngineState {
 
         let models = &self.resources.models;
         let mut requested_model = None;
+
+        self.settings.changed = false;
         self.ui.draw(&self.context, &mut encoder, &view, |ui| {
             requested_model = self
                 .app_ui

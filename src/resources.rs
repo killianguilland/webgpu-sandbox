@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use wgpu::{util::DeviceExt, wgc::global};
+use wgpu::util::DeviceExt;
 
 use image::codecs::hdr::HdrDecoder;
 

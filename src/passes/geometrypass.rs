@@ -12,6 +12,7 @@ impl GeometryPass {
     pub fn new(
         context: &GraphicsContext,
         renderer: &Renderer,
+        _settings: &crate::settings::RenderSettings,
         _hdr_format: wgpu::TextureFormat,
     ) -> Self {
         let render_pipeline_layout =
@@ -108,6 +109,7 @@ impl RenderPass for GeometryPass {
         resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
+        _settings: &crate::settings::RenderSettings,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Geometry Render Pass"),

@@ -1,7 +1,7 @@
 use crate::context::GraphicsContext;
 use crate::renderer::{Renderer, create_render_pipeline};
-use crate::viewer::ModelViewer;
 use crate::texture;
+use crate::viewer::ModelViewer;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -31,6 +31,7 @@ impl GizmoPass {
     pub fn new(
         context: &GraphicsContext,
         renderer: &Renderer,
+        _settings: &crate::settings::RenderSettings,
         hdr_format: wgpu::TextureFormat,
     ) -> Self {
         let layout = context
@@ -130,6 +131,7 @@ impl crate::renderer::RenderPass for GizmoPass {
         _resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
+        _settings: &crate::settings::RenderSettings,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Gizmo Render Pass"),

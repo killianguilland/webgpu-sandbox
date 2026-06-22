@@ -36,9 +36,11 @@ struct CameraUniform {
 }
 @group(1) @binding(0) var<uniform> camera: CameraUniform;
 
-// Group 2: Noise Texture
+// Group 2: SSAO Data
 @group(2) @binding(0) var t_noise: texture_2d<f32>;
 @group(2) @binding(1) var s_noise: sampler;
+@group(2) @binding(2) var<uniform> kernel_samples: array<vec4<f32>, 64>;
+
 
 struct SettingsUniform {
     ambient_intensity: f32,
@@ -100,7 +102,9 @@ fn reconstruct_view_position(uv: vec2<f32>, depth: f32) -> vec3<f32> {
     var occlusion = 0.0;
 
     for (var i = 0u; i < settings.ssao_kernel_size; i++) {
-        let sample_vector = generate_sample(i, f32(settings.ssao_kernel_size));
+        // We only need the xyz, we ignore the 'w' padding
+        let sample_vector = kernel_samples[i].xyz;
+        // let sample_vector = generate_sample(i, f32(settings.ssao_kernel_size));
         let rotated_vector = TBN * sample_vector * settings.ssao_radius;
         let view_space_location = view_pos + rotated_vector;
 

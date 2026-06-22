@@ -56,7 +56,7 @@ pub struct SettingsUniform {
     pub ssao_radius: f32,
     pub ssao_bias: f32,
     pub ssao_power: f32,
-    
+
     pub hdr_exposure: f32,
     pub ssao_kernel_size: u32,
     pub _pad1: f32,
@@ -201,7 +201,7 @@ pub trait RenderPass {
         viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
-        renderer: &Renderer,
+        renderer: &Renderer, settings: &crate::settings::RenderSettings,
     );
 }
 
@@ -451,32 +451,31 @@ impl Renderer {
                 ],
             });
 
-        let hierarchy_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Hierarchy Bind Group Layout"),
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0, // The SSBO
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Storage { read_only: true },
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
+        let hierarchy_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Hierarchy Bind Group Layout"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0, // The SSBO
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
                     },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1, // The Dynamic Uniform Buffer
-                        visibility: wgpu::ShaderStages::VERTEX,
-                        ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
-                            has_dynamic_offset: true, // <--- Crucial!
-                            min_binding_size: wgpu::BufferSize::new(4),
-                        },
-                        count: None,
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1, // The Dynamic Uniform Buffer
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: true, // <--- Crucial!
+                        min_binding_size: wgpu::BufferSize::new(4),
                     },
-                ],
-            });
+                    count: None,
+                },
+            ],
+        });
 
         let projection = Projection::new(
             context.config.width,
@@ -535,7 +534,12 @@ impl Renderer {
         self.blur_target.resize(device, config);
     }
 
-    pub fn update(&mut self, context: &GraphicsContext, viewer: &ModelViewer, settings: &crate::settings::RenderSettings) {
+    pub fn update(
+        &mut self,
+        context: &GraphicsContext,
+        viewer: &ModelViewer,
+        settings: &crate::settings::RenderSettings,
+    ) {
         // Update projection if FOV changed
         self.projection = Projection::new(
             context.config.width,
@@ -586,7 +590,8 @@ impl Renderer {
         }
 
         // Retain only the current model's buffer
-        self.instance_buffers.retain(|name, _| name == &viewer.model_name);
+        self.instance_buffers
+            .retain(|name, _| name == &viewer.model_name);
 
         let raw_instances: Vec<InstanceRaw> = viewer.instances.iter().map(|i| i.to_raw()).collect();
         let instance_bytes = bytemuck::cast_slice(&raw_instances);
@@ -602,8 +607,10 @@ impl Renderer {
                     contents: instance_bytes,
                     usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
                 });
-            self.instance_buffers
-                .insert(viewer.model_name.clone(), (buffer, raw_instances.len() as u32));
+            self.instance_buffers.insert(
+                viewer.model_name.clone(),
+                (buffer, raw_instances.len() as u32),
+            );
         }
     }
 
@@ -624,7 +631,7 @@ impl Renderer {
                 }
             }
 
-            pass.render(encoder, view, gbuffer, viewer, resources, context, self);
+            pass.render(encoder, view, gbuffer, viewer, resources, context, self, settings);
         }
     }
 }

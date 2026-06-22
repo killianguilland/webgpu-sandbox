@@ -10,6 +10,7 @@ impl LightingPass {
     pub fn new(
         context: &GraphicsContext,
         renderer: &Renderer,
+        _settings: &crate::settings::RenderSettings,
         gbuffer: &GBuffer,
         hdr_format: wgpu::TextureFormat,
     ) -> Self {
@@ -68,9 +69,7 @@ impl LightingPass {
                 cache: None,
             });
 
-        Self {
-            pipeline,
-        }
+        Self { pipeline }
     }
 }
 
@@ -88,6 +87,7 @@ impl crate::renderer::RenderPass for LightingPass {
         resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &crate::renderer::Renderer,
+        _settings: &crate::settings::RenderSettings,
     ) {
         // Update the uniform
 

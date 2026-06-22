@@ -257,10 +257,22 @@ impl AppUi {
                     window_ui.heading("SSAO Settings");
                     window_ui.horizontal(|ui| {
                         ui.label("Samples");
-                        ui.radio_value(&mut settings.ssao_kernel_size, 8, "8");
-                        ui.radio_value(&mut settings.ssao_kernel_size, 16, "16");
-                        ui.radio_value(&mut settings.ssao_kernel_size, 32, "32");
-                        ui.radio_value(&mut settings.ssao_kernel_size, 64, "64");
+                        let mut kernel_changed = false;
+                        kernel_changed |= ui
+                            .radio_value(&mut settings.ssao_kernel_size, 8, "8")
+                            .changed();
+                        kernel_changed |= ui
+                            .radio_value(&mut settings.ssao_kernel_size, 16, "16")
+                            .changed();
+                        kernel_changed |= ui
+                            .radio_value(&mut settings.ssao_kernel_size, 32, "32")
+                            .changed();
+                        kernel_changed |= ui
+                            .radio_value(&mut settings.ssao_kernel_size, 64, "64")
+                            .changed();
+                        if kernel_changed {
+                            settings.changed = true;
+                        }
                     });
                     window_ui.add(
                         egui::Slider::new(&mut settings.ssao_radius, 0.01..=1.0).text("Radius"),

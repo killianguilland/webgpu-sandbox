@@ -4,6 +4,7 @@ use crate::renderer::{RenderPass, Renderer};
 use crate::resources::ResourceManager;
 use crate::texture::Texture;
 use crate::viewer::ModelViewer;
+use wgpu::util::DeviceExt;
 
 pub const SSAO_NOISE_DATA: [[u8; 4]; 16] = [
     [100, 200, 0, 255],
@@ -24,14 +25,43 @@ pub const SSAO_NOISE_DATA: [[u8; 4]; 16] = [
     [205, 100, 0, 255],
 ];
 
+// Put this outside your SsaoPass struct
+fn generate_ssao_samples(kernel_size: u32) -> [[f32; 4]; 64] {
+    let mut samples = [[0.0; 4]; 64];
+    for i in 0..kernel_size {
+        let phi = (i as f32) * 2.39996323;
+        // Use the actual kernel size here!
+        let cos_theta = 1.0 - (i as f32 + 0.5) / (kernel_size as f32);
+        let sin_theta = (1.0 - cos_theta * cos_theta).sqrt();
+
+        // And here!
+        let scale = (i as f32) / (kernel_size as f32);
+        let distance = 0.1 + (1.0 - 0.1) * (scale * scale);
+
+        samples[i as usize] = [
+            phi.cos() * sin_theta * distance,
+            phi.sin() * sin_theta * distance,
+            cos_theta * distance,
+            0.0,
+        ];
+    }
+    samples
+}
+
 pub struct SsaoPass {
     pub pipeline: wgpu::RenderPipeline,
-    pub noise_bind_group: wgpu::BindGroup,
+    pub ssao_bind_group: wgpu::BindGroup,
     pub noise_texture: Texture,
+    pub samples_buffer: wgpu::Buffer,
 }
 
 impl SsaoPass {
-    pub fn new(context: &GraphicsContext, renderer: &Renderer, gbuffer: &GBuffer) -> Self {
+    pub fn new(
+        context: &GraphicsContext,
+        renderer: &Renderer,
+        settings: &crate::settings::RenderSettings,
+        gbuffer: &GBuffer,
+    ) -> Self {
         let device = &context.device;
 
         let noise_texture = Texture::from_raw_rgba(
@@ -44,8 +74,15 @@ impl SsaoPass {
         )
         .unwrap();
 
+        let ssao_samples = generate_ssao_samples(settings.ssao_kernel_size);
+        let samples_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("SSAO Samples Buffer"),
+            contents: bytemuck::cast_slice(&ssao_samples),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         // 2. Create Noise Bind Group Layout
-        let noise_bind_group_layout =
+        let ssao_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("SSAO Noise Bind Group Layout"),
                 entries: &[
@@ -65,6 +102,16 @@ impl SsaoPass {
                         ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::NonFiltering),
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
@@ -80,9 +127,9 @@ impl SsaoPass {
             ..Default::default()
         });
 
-        let noise_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let ssao_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("SSAO Noise Bind Group"),
-            layout: &noise_bind_group_layout,
+            layout: &ssao_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -92,6 +139,10 @@ impl SsaoPass {
                     binding: 1,
                     // Bind our new custom sampler instead of noise_texture.sampler!
                     resource: wgpu::BindingResource::Sampler(&custom_noise_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: samples_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -104,7 +155,7 @@ impl SsaoPass {
             bind_group_layouts: &[
                 Some(&gbuffer.layout),
                 Some(&renderer.camera_bind_group_layout),
-                Some(&noise_bind_group_layout),
+                Some(&ssao_bind_group_layout),
                 Some(&renderer.settings_bind_group_layout),
             ],
             immediate_size: 0,
@@ -149,8 +200,9 @@ impl SsaoPass {
 
         Self {
             pipeline,
-            noise_bind_group,
+            ssao_bind_group,
             noise_texture,
+            samples_buffer,
         }
     }
 }
@@ -167,9 +219,21 @@ impl RenderPass for SsaoPass {
         gbuffer: &GBuffer,
         _viewer: &ModelViewer,
         _resources: &ResourceManager,
-        _context: &GraphicsContext,
+        context: &GraphicsContext,
         renderer: &Renderer,
+        settings: &crate::settings::RenderSettings,
     ) {
+        if settings.changed {
+            println!("recreating ssao pipeline");
+            let ssao_samples = generate_ssao_samples(settings.ssao_kernel_size);
+
+            context.queue.write_buffer(
+                &self.samples_buffer,
+                0,
+                bytemuck::cast_slice(&ssao_samples),
+            );
+        }
+
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("SSAO Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -193,7 +257,7 @@ impl RenderPass for SsaoPass {
         // 2. Bind the data
         pass.set_bind_group(0, &gbuffer.bind_group, &[]);
         pass.set_bind_group(1, &renderer.camera_bind_group, &[]);
-        pass.set_bind_group(2, &self.noise_bind_group, &[]);
+        pass.set_bind_group(2, &self.ssao_bind_group, &[]);
         pass.set_bind_group(3, &renderer.settings_bind_group, &[]);
 
         // 3. Draw a fullscreen triangle!

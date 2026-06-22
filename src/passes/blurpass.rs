@@ -69,6 +69,7 @@ impl crate::renderer::RenderPass for BlurPass {
         _resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &crate::renderer::Renderer,
+        _settings: &crate::settings::RenderSettings,
     ) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Blur Pass Render"),

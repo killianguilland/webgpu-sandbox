@@ -12,6 +12,7 @@ impl TransparentPass {
     pub fn new(
         context: &GraphicsContext,
         renderer: &Renderer,
+        _settings: &crate::settings::RenderSettings,
         hdr_format: wgpu::TextureFormat,
     ) -> Self {
         let render_pipeline_layout =
@@ -99,6 +100,7 @@ impl RenderPass for TransparentPass {
         resources: &crate::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
+        _settings: &crate::settings::RenderSettings,
     ) {
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Transparent Render Pass"),
