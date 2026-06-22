@@ -24,6 +24,7 @@ impl LightingPass {
                         Some(&renderer.light_bind_group_layout),
                         Some(&renderer.environment_layout),
                         Some(&renderer.blur_target.bind_group_layout),
+                        Some(&renderer.settings_bind_group_layout),
                     ],
                     immediate_size: 0,
                 });
@@ -115,6 +116,7 @@ impl crate::renderer::RenderPass for LightingPass {
         pass.set_bind_group(2, &renderer.light_bind_group, &[]);
         pass.set_bind_group(3, env_bind_group, &[]);
         pass.set_bind_group(4, &renderer.blur_target.bind_group, &[]);
+        pass.set_bind_group(5, &renderer.settings_bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

@@ -105,6 +105,7 @@ impl SsaoPass {
                 Some(&gbuffer.layout),
                 Some(&renderer.camera_bind_group_layout),
                 Some(&noise_bind_group_layout),
+                Some(&renderer.settings_bind_group_layout),
             ],
             immediate_size: 0,
         });
@@ -193,6 +194,7 @@ impl RenderPass for SsaoPass {
         pass.set_bind_group(0, &gbuffer.bind_group, &[]);
         pass.set_bind_group(1, &renderer.camera_bind_group, &[]);
         pass.set_bind_group(2, &self.noise_bind_group, &[]);
+        pass.set_bind_group(3, &renderer.settings_bind_group, &[]);
 
         // 3. Draw a fullscreen triangle!
         pass.draw(0..3, 0..1);

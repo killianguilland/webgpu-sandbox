@@ -1,6 +1,6 @@
 use crate::model::Model;
 use crate::{context::GraphicsContext, viewer::ModelViewer};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 pub struct UiState {
     pub ctx: egui::Context,
@@ -104,13 +104,35 @@ impl UiState {
 }
 
 pub struct AppUi {
-    pub open_windows: HashSet<String>,
+    is_view_panel_open: bool,
+    is_model_panel_open: bool,
+    example_models: Vec<String>,
 }
 
 impl AppUi {
     pub fn new() -> Self {
+        let mut example_models = Vec::new();
+        if let Ok(entries) = std::fs::read_dir("res/gltf-models") {
+            for entry in entries.filter_map(Result::ok) {
+                if entry.file_type().map_or(false, |ft| ft.is_dir()) {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    let gltf_path = format!("gltf-models/{}/glTF/{}.gltf", name, name);
+                    let glb_path = format!("gltf-models/{}/glTF-Binary/{}.glb", name, name);
+
+                    if std::path::Path::new(&format!("res/{}", gltf_path)).exists() {
+                        example_models.push(gltf_path);
+                    } else if std::path::Path::new(&format!("res/{}", glb_path)).exists() {
+                        example_models.push(glb_path);
+                    }
+                }
+            }
+        }
+        example_models.sort();
+
         Self {
-            open_windows: HashSet::new(),
+            is_model_panel_open: false,
+            is_view_panel_open: false,
+            example_models,
         }
     }
 
@@ -120,95 +142,201 @@ impl AppUi {
         viewer: &ModelViewer,
         models: &HashMap<String, Model>,
         settings: &mut crate::settings::RenderSettings,
-    ) {
-        egui::Window::new("Viewer settings").show(ui.ctx(), |window_ui| {
-            window_ui.heading("Render options");
-            window_ui.label(format!(
-                "Camera position: X {} | Y {} | Z {}",
-                viewer.camera.position.x.round(),
-                viewer.camera.position.y.round(),
-                viewer.camera.position.z.round(),
-            ));
-            for (pass_name, is_enabled) in settings.pass_states.iter_mut() {
-                window_ui.checkbox(is_enabled, format!("{} pass", pass_name));
-            }
+    ) -> Option<String> {
+        let mut load_path = None;
+        egui::Panel::top("wrap_app_top_bar")
+            // .frame(egui::Frame::new().inner_margin(4))
+            .show_inside(ui, |ui| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.visuals_mut().button_frame = false;
 
-            window_ui.separator();
+                    ui.menu_button("File", |ui| {
+                        ui.menu_button("Open Example", |ui| {
+                            egui::ScrollArea::vertical()
+                                .max_height(400.0)
+                                .show(ui, |ui| {
+                                    for path in &self.example_models {
+                                        let label = std::path::Path::new(path)
+                                            .file_stem()
+                                            .and_then(|s| s.to_str())
+                                            .unwrap_or("Unknown Model");
+                                        if ui.button(label).clicked() {
+                                            load_path = Some(path.clone());
+                                            ui.close();
+                                        }
+                                    }
+                                });
+                        });
+                        ui.separator();
+                        if ui.button("Quit").clicked() {
+                            std::process::exit(0);
+                        }
+                    });
 
-            window_ui.checkbox(&mut settings.animate_light, "Animate light");
-
-            window_ui.separator();
-
-            window_ui.heading("G-Buffer visualizer");
-            window_ui.radio_value(&mut settings.debug_mode, 0, "None");
-            window_ui.radio_value(&mut settings.debug_mode, 1, "Albedo");
-            window_ui.radio_value(&mut settings.debug_mode, 2, "Normal");
-            window_ui.radio_value(&mut settings.debug_mode, 3, "Metal/Rough");
-            window_ui.radio_value(&mut settings.debug_mode, 4, "Depth");
-            window_ui.radio_value(&mut settings.debug_mode, 5, "SSAO");
-
-            window_ui.separator();
-
-            window_ui.heading("Models inspector");
-            for instance in &viewer.instances {
-                let model_name = &instance.model_name;
-                if window_ui.button(model_name).clicked() {
-                    if self.open_windows.contains(model_name) {
-                        self.open_windows.remove(model_name);
-                    } else {
-                        self.open_windows.insert(model_name.clone());
+                    if ui
+                        .selectable_label(self.is_view_panel_open, "View")
+                        .clicked()
+                    {
+                        self.is_view_panel_open = !self.is_view_panel_open;
                     }
-                }
-            }
+
+                    if ui
+                        .selectable_label(self.is_model_panel_open, "Model")
+                        .clicked()
+                    {
+                        self.is_model_panel_open = !self.is_model_panel_open;
+                    }
+                });
+            });
+
+        egui::Panel::bottom("Bottom data").show_inside(ui, |window_ui| {
+            window_ui.horizontal_wrapped(|hz_ui| {
+                hz_ui.add_space(6.0);
+                egui::widgets::global_theme_preference_switch(hz_ui);
+                hz_ui.separator();
+                hz_ui.label(format!(
+                    "Camera position: ({}, {}, {})",
+                    viewer.camera.position.x.round(),
+                    viewer.camera.position.y.round(),
+                    viewer.camera.position.z.round(),
+                ));
+            });
         });
+        if self.is_view_panel_open {
+            egui::Panel::left("View").show_inside(ui, |window_ui| {
+                egui::ScrollArea::vertical().show(window_ui, |window_ui| {
+                    window_ui.heading("Render options");
+                    for (pass_name, is_enabled) in settings.pass_states.iter_mut() {
+                        window_ui.checkbox(is_enabled, format!("{} pass", pass_name));
+                    }
 
-        let mut closed_windows = Vec::new();
+                    window_ui.separator();
 
-        for model_name in self.open_windows.iter() {
-            let mut is_open = true;
+                    window_ui.heading("Lighting");
+                    window_ui.horizontal(|ui| {
+                        ui.label("Position");
+                        ui.add(
+                            egui::DragValue::new(&mut settings.light_position[0])
+                                .speed(0.1)
+                                .prefix("X: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut settings.light_position[1])
+                                .speed(0.1)
+                                .prefix("Y: "),
+                        );
+                        ui.add(
+                            egui::DragValue::new(&mut settings.light_position[2])
+                                .speed(0.1)
+                                .prefix("Z: "),
+                        );
+                    });
+                    window_ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Slider::new(&mut settings.light_intensity, 0.0..=500.0)
+                                .text("Intensity"),
+                        );
+                        ui.color_edit_button_rgb(&mut settings.light_color);
+                    });
+                    window_ui.add(
+                        egui::Slider::new(&mut settings.ambient_intensity, 0.0..=0.2)
+                            .text("Ambient"),
+                    );
 
-            egui::Window::new(model_name)
-                .open(&mut is_open)
-                .show(ui.ctx(), |_window_ui| {
-                    let model = models.get(model_name).expect("Model not found");
+                    window_ui.separator();
 
-                    _window_ui.separator();
+                    window_ui.heading("Camera");
+                    window_ui
+                        .add(egui::Slider::new(&mut settings.camera_fov, 30.0..=120.0).text("FOV"));
+                    window_ui.add(
+                        egui::Slider::new(&mut settings.hdr_exposure, 0.1..=10.0).text("Exposure"),
+                    );
 
-                    egui::CollapsingHeader::new(format!("Meshes ({})", model.meshes.len()))
+                    window_ui.separator();
+
+                    window_ui.heading("SSAO Settings");
+                    window_ui.horizontal(|ui| {
+                        ui.label("Samples");
+                        ui.radio_value(&mut settings.ssao_kernel_size, 8, "8");
+                        ui.radio_value(&mut settings.ssao_kernel_size, 16, "16");
+                        ui.radio_value(&mut settings.ssao_kernel_size, 32, "32");
+                        ui.radio_value(&mut settings.ssao_kernel_size, 64, "64");
+                    });
+                    window_ui.add(
+                        egui::Slider::new(&mut settings.ssao_radius, 0.01..=1.0).text("Radius"),
+                    );
+                    window_ui.add(
+                        egui::Slider::new(&mut settings.ssao_bias, 0.0..=0.1).text("Acne Bias"),
+                    );
+                    window_ui
+                        .add(egui::Slider::new(&mut settings.ssao_power, 0.5..=5.0).text("Power"));
+
+                    window_ui.separator();
+
+                    window_ui.heading("G-Buffer visualizer");
+                    window_ui.radio_value(&mut settings.debug_mode, 0, "None");
+                    window_ui.radio_value(&mut settings.debug_mode, 1, "Albedo");
+                    window_ui.radio_value(&mut settings.debug_mode, 2, "Normal");
+                    window_ui.radio_value(&mut settings.debug_mode, 3, "Metal/Rough");
+                    window_ui.radio_value(&mut settings.debug_mode, 4, "Depth");
+                    window_ui.radio_value(&mut settings.debug_mode, 5, "SSAO");
+                });
+            });
+        }
+
+        if self.is_model_panel_open {
+            egui::Panel::right("Model settings").show_inside(ui, |window_ui| {
+                egui::ScrollArea::vertical().show(window_ui, |window_ui| {
+                    if let Some(model) = models.get(&viewer.model_name) {
+                        egui::CollapsingHeader::new(format!("Meshes ({})", model.meshes.len()))
+                            .default_open(true)
+                            .show(window_ui, |ui| {
+                                for mesh in model.meshes.iter() {
+                                    egui::CollapsingHeader::new(&mesh.name).show(ui, |ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.strong("Elements:");
+                                            ui.label(mesh.num_elements.to_string());
+                                        });
+                                        ui.horizontal(|ui| {
+                                            ui.strong("Material index:");
+                                            ui.label(mesh.material.to_string());
+                                        });
+                                    });
+                                }
+                            });
+
+                        window_ui.separator();
+
+                        egui::CollapsingHeader::new(format!(
+                            "Materials ({})",
+                            model.materials.len()
+                        ))
                         .default_open(true)
-                        .show(_window_ui, |ui| {
-                            for mesh in model.meshes.iter() {
-                                egui::CollapsingHeader::new(&mesh.name).show(ui, |ui| {
-                                    ui.horizontal(|ui| {
-                                        ui.strong("Elements:");
-                                        ui.label(mesh.num_elements.to_string());
-                                    });
-                                    ui.horizontal(|ui| {
-                                        ui.strong("Material index:");
-                                        ui.label(mesh.material.to_string());
-                                    });
+                        .show(window_ui, |ui| {
+                            for mat in model.materials.iter() {
+                                egui::CollapsingHeader::new(&mat.name).show(ui, |ui| {
+                                    if mat.is_transparent {
+                                        ui.label("Transparent");
+                                    } else {
+                                        ui.label("Opaque");
+                                    }
+                                    ui.label(format!(
+                                        "Base color ({}, {}, {}, {})",
+                                        mat.uniforms.base_color_factor[0],
+                                        mat.uniforms.base_color_factor[1],
+                                        mat.uniforms.base_color_factor[2],
+                                        mat.uniforms.base_color_factor[3]
+                                    ));
                                 });
                             }
                         });
-
-                    _window_ui.separator();
-
-                    egui::CollapsingHeader::new(format!("Materials ({})", model.materials.len()))
-                        .default_open(true)
-                        .show(_window_ui, |ui| {
-                            for mat in model.materials.iter() {
-                                egui::CollapsingHeader::new(&mat.name).show(ui, |_ui| {});
-                            }
-                        });
+                    } else {
+                        window_ui.label("Loading model...");
+                    }
                 });
-
-            if !is_open {
-                closed_windows.push(model_name.clone());
-            }
+            });
         }
 
-        for closed in closed_windows {
-            self.open_windows.remove(&closed);
-        }
+        load_path
     }
 }

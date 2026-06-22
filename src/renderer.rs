@@ -50,6 +50,20 @@ impl CameraUniform {
 }
 
 #[repr(C)]
+#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct SettingsUniform {
+    pub ambient_intensity: f32,
+    pub ssao_radius: f32,
+    pub ssao_bias: f32,
+    pub ssao_power: f32,
+    
+    pub hdr_exposure: f32,
+    pub ssao_kernel_size: u32,
+    pub _pad1: f32,
+    pub _pad2: f32,
+}
+
+#[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct InstanceRaw {
     pub model: [[f32; 4]; 4],
@@ -204,6 +218,10 @@ pub struct Renderer {
     pub light_bind_group_layout: wgpu::BindGroupLayout,
     pub light_bind_group: wgpu::BindGroup,
 
+    pub settings_buffer: wgpu::Buffer,
+    pub settings_bind_group_layout: wgpu::BindGroupLayout,
+    pub settings_bind_group: wgpu::BindGroup,
+
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
     pub environment_layout: wgpu::BindGroupLayout,
 
@@ -249,6 +267,46 @@ impl Renderer {
                 resource: camera_buffer.as_entire_binding(),
             }],
             label: Some("camera_bind_group"),
+        });
+
+        let settings_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("settings_bind_group_layout"),
+            });
+
+        let settings_uniform = SettingsUniform {
+            ambient_intensity: 0.03,
+            ssao_radius: 0.25,
+            ssao_bias: 0.025,
+            ssao_power: 2.0,
+            hdr_exposure: 1.0,
+            ssao_kernel_size: 16,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        };
+        let settings_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Settings Buffer"),
+            contents: bytemuck::cast_slice(&[settings_uniform]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let settings_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &settings_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: settings_buffer.as_entire_binding(),
+            }],
+            label: Some("settings_bind_group"),
         });
 
         let light_uniform = LightUniform {
@@ -417,12 +475,20 @@ impl Renderer {
             camera_buffer,
             camera_bind_group_layout,
             camera_bind_group,
+
             light_buffer,
             light_bind_group_layout,
             light_bind_group,
+
+            settings_buffer,
+            settings_bind_group_layout,
+            settings_bind_group,
+
             texture_bind_group_layout,
             environment_layout,
+
             instance_buffers: HashMap::new(),
+
             projection,
             passes: Vec::new(),
             ssao_target,
@@ -440,13 +506,38 @@ impl Renderer {
         self.blur_target.resize(device, config);
     }
 
-    pub fn update(&mut self, context: &GraphicsContext, viewer: &ModelViewer) {
+    pub fn update(&mut self, context: &GraphicsContext, viewer: &ModelViewer, settings: &crate::settings::RenderSettings) {
+        // Update projection if FOV changed
+        self.projection = Projection::new(
+            context.config.width,
+            context.config.height,
+            cgmath::Deg(settings.camera_fov),
+            0.1,
+            100.0,
+        );
+
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&viewer.camera, &self.projection);
         context.queue.write_buffer(
             &self.camera_buffer,
             0,
             bytemuck::cast_slice(&[camera_uniform]),
+        );
+
+        let settings_uniform = SettingsUniform {
+            ambient_intensity: settings.ambient_intensity,
+            ssao_radius: settings.ssao_radius,
+            ssao_bias: settings.ssao_bias,
+            ssao_power: settings.ssao_power,
+            hdr_exposure: settings.hdr_exposure,
+            ssao_kernel_size: settings.ssao_kernel_size,
+            _pad1: 0.0,
+            _pad2: 0.0,
+        };
+        context.queue.write_buffer(
+            &self.settings_buffer,
+            0,
+            bytemuck::cast_slice(&[settings_uniform]),
         );
 
         let lights = &viewer.lights;
@@ -465,39 +556,25 @@ impl Renderer {
             );
         }
 
-        let mut instances_by_model: HashMap<String, Vec<InstanceRaw>> = HashMap::new();
-        for instance in &viewer.instances {
-            instances_by_model
-                .entry(instance.model_name.clone())
-                .or_default()
-                .push(instance.to_raw());
-        }
+        // Retain only the current model's buffer
+        self.instance_buffers.retain(|name, _| name == &viewer.model_name);
 
-        // Reset all counts to 0 so we don't draw models that were removed from the viewer
-        for val in self.instance_buffers.values_mut() {
-            val.1 = 0;
-        }
+        let raw_instances: Vec<InstanceRaw> = viewer.instances.iter().map(|i| i.to_raw()).collect();
+        let instance_bytes = bytemuck::cast_slice(&raw_instances);
 
-        for (model_name, raw_instances) in instances_by_model {
-            let instance_bytes = bytemuck::cast_slice(&raw_instances);
-            // 2. Check if we already created a buffer for this model
-            if let Some((buffer, count)) = self.instance_buffers.get_mut(&model_name) {
-                // Buffer exists! Just overwrite the data. This is super fast.
-                context.queue.write_buffer(buffer, 0, instance_bytes);
-                *count = raw_instances.len() as u32;
-            } else {
-                // Buffer doesn't exist yet (first frame). Create it!
-                let buffer = context
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some(&format!("Instance Buffer for {}", model_name)),
-                        contents: instance_bytes,
-                        // IMPORTANT: Make sure COPY_DST is here so we can write to it later
-                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-                    });
-                self.instance_buffers
-                    .insert(model_name, (buffer, raw_instances.len() as u32));
-            }
+        if let Some((buffer, count)) = self.instance_buffers.get_mut(&viewer.model_name) {
+            context.queue.write_buffer(buffer, 0, instance_bytes);
+            *count = raw_instances.len() as u32;
+        } else {
+            let buffer = context
+                .device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some(&format!("Instance Buffer for {}", viewer.model_name)),
+                    contents: instance_bytes,
+                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+                });
+            self.instance_buffers
+                .insert(viewer.model_name.clone(), (buffer, raw_instances.len() as u32));
         }
     }
 

@@ -15,12 +15,10 @@ pub struct Hdr {
 }
 
 impl Hdr {
-    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
+    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, settings_layout: &wgpu::BindGroupLayout) -> Self {
         let width = config.width;
         let height = config.height;
 
-        // We could use `Rgba32Float`, but that requires some extra
-        // features to be enabled for rendering.
         let format = wgpu::TextureFormat::Rgba16Float;
 
         let texture = texture::Texture::create_2d_texture(
@@ -36,7 +34,6 @@ impl Hdr {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Hdr::layout"),
             entries: &[
-                // This is the HDR texture
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::FRAGMENT,
@@ -70,11 +67,10 @@ impl Hdr {
             ],
         });
 
-        // We'll cover the shader next
         let shader = wgpu::include_wgsl!("../shaders/hdr.wgsl");
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[Some(&layout)],
+            bind_group_layouts: &[Some(&layout), Some(settings_layout)],
             immediate_size: 0,
         });
 
@@ -83,8 +79,6 @@ impl Hdr {
             &pipeline_layout,
             config.format.add_srgb_suffix(),
             None,
-            // We'll use some math to generate the vertex data in
-            // the shader, so we don't need any vertex buffers
             &[],
             wgpu::PrimitiveTopology::TriangleList,
             shader,
@@ -101,7 +95,6 @@ impl Hdr {
         }
     }
 
-    /// Resize the HDR texture
     pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         self.texture = texture::Texture::create_2d_texture(
             device,
@@ -130,19 +123,15 @@ impl Hdr {
         self.height = height;
     }
 
-    /// Exposes the HDR texture
     pub fn view(&self) -> &wgpu::TextureView {
         &self.texture.view
     }
 
-    /// The format of the HDR texture
     pub fn format(&self) -> wgpu::TextureFormat {
         self.format
     }
 
-    /// This renders the internal HDR texture to the [TextureView]
-    /// supplied as parameter.
-    pub fn process(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView) {
+    pub fn process(&self, encoder: &mut wgpu::CommandEncoder, output: &wgpu::TextureView, settings_bind_group: &wgpu::BindGroup) {
         let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Hdr::process"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -161,6 +150,7 @@ impl Hdr {
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &self.bind_group, &[]);
+        pass.set_bind_group(1, settings_bind_group, &[]);
         pass.draw(0..3, 0..1);
     }
 }

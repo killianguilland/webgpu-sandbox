@@ -22,7 +22,6 @@ pub trait RenderDebug {
 }
 
 pub struct Instance {
-    pub model_name: String,
     pub position: Vector3<f32>,
     pub rotation: Quaternion<f32>,
 }
@@ -51,6 +50,7 @@ impl RenderDebug for Light {
 pub struct ModelViewer {
     pub camera: Camera,
     pub camera_controller: CameraController,
+    pub model_name: String,
     pub instances: Vec<Instance>,
     pub lights: Vec<Light>,
     pub skybox_path: String,
@@ -63,7 +63,6 @@ impl ModelViewer {
         let camera_controller = CameraController::new(4.0, 0.4);
 
         let instances = vec![Instance {
-            model_name: "models/OBJ/camera/camera.obj".to_string(),
             position: Vector3::zero(),
             rotation: Quaternion::from_axis_angle(Vector3::unit_z(), cgmath::Deg(0.0)),
         }];
@@ -76,6 +75,7 @@ impl ModelViewer {
         Self {
             camera,
             camera_controller,
+            model_name: "models/OBJ/camera/camera.obj".to_string(),
             instances,
             lights,
             skybox_path: "pure-sky.hdr".to_string(),
@@ -83,19 +83,24 @@ impl ModelViewer {
         }
     }
 
-    pub fn update(&mut self, dt: Duration, input: &mut Input, animate_light: bool) {
+    pub fn update(&mut self, dt: Duration, input: &mut Input, settings: &crate::settings::RenderSettings) {
         self.camera_controller
             .update_camera(&mut self.camera, dt, input);
 
         self.time += dt.as_secs_f32();
 
-        // Animate light
-        if animate_light && !self.lights.is_empty() {
-            let old_position = self.lights[0].position;
-            self.lights[0].position = cgmath::Quaternion::from_axis_angle(
-                Vector3::new(0.0, 1.0, 0.0),
-                cgmath::Deg(60.0 * dt.as_secs_f32()),
-            ) * old_position;
+        // Sync light from settings
+        if !self.lights.is_empty() {
+            self.lights[0].position = cgmath::Vector3::new(
+                settings.light_position[0],
+                settings.light_position[1],
+                settings.light_position[2],
+            );
+            self.lights[0].color = cgmath::Vector3::new(
+                settings.light_color[0] * settings.light_intensity,
+                settings.light_color[1] * settings.light_intensity,
+                settings.light_color[2] * settings.light_intensity,
+            );
         }
     }
 

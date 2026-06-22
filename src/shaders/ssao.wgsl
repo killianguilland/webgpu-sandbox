@@ -40,21 +40,30 @@ struct CameraUniform {
 @group(2) @binding(0) var t_noise: texture_2d<f32>;
 @group(2) @binding(1) var s_noise: sampler;
 
-// Our Hardcoded Settings!
-const RADIUS: f32 = 0.25;
-const KERNEL_SIZE: u32 = 16u;
-const SSAO_KERNEL = array<vec4<f32>, 16>(
-    vec4<f32>( 0.052,  0.014,  0.084, 0.0), vec4<f32>(-0.065,  0.111,  0.158, 0.0),
-    vec4<f32>( 0.176, -0.125,  0.222, 0.0), vec4<f32>(-0.188, -0.203,  0.108, 0.0),
-    vec4<f32>( 0.287,  0.198,  0.154, 0.0), vec4<f32>(-0.324,  0.187,  0.267, 0.0),
-    vec4<f32>( 0.254, -0.388,  0.312, 0.0), vec4<f32>(-0.267, -0.422,  0.188, 0.0),
-    vec4<f32>( 0.485,  0.334,  0.288, 0.0), vec4<f32>(-0.556,  0.278,  0.311, 0.0),
-    vec4<f32>( 0.444, -0.589,  0.366, 0.0), vec4<f32>(-0.478, -0.512,  0.422, 0.0),
-    vec4<f32>( 0.765,  0.432,  0.211, 0.0), vec4<f32>(-0.688,  0.511,  0.455, 0.0),
-    vec4<f32>( 0.655, -0.711,  0.388, 0.0), vec4<f32>(-0.722, -0.655,  0.299, 0.0)
-);
-const ACNE_BIAS: f32 = 0.025;
-const POWER: f32 = 2.0;
+struct SettingsUniform {
+    ambient_intensity: f32,
+    ssao_radius: f32,
+    ssao_bias: f32,
+    ssao_power: f32,
+    hdr_exposure: f32,
+    ssao_kernel_size: u32,
+    _pad1: f32,
+    _pad2: f32,
+};
+@group(3) @binding(0) var<uniform> settings: SettingsUniform;
+
+// Golden ratio spherical fibonacci for highly uniform hemisphere point distribution
+fn generate_sample(index: u32, total_samples: f32) -> vec3<f32> {
+    let phi = f32(index) * 2.39996323; // Golden angle = PI * (3 - sqrt(5))
+    let cos_theta = 1.0 - (f32(index) + 0.5) / total_samples;
+    let sin_theta = sqrt(1.0 - cos_theta * cos_theta);
+    
+    // Cluster samples near the origin to capture small details
+    let scale = f32(index) / total_samples;
+    let distance = mix(0.1, 1.0, scale * scale);
+    
+    return vec3<f32>(cos(phi) * sin_theta, sin(phi) * sin_theta, cos_theta) * distance;
+}
 
 fn reconstruct_view_position(uv: vec2<f32>, depth: f32) -> vec3<f32> {
     // 1. Convert UV to Normalized Device Coordinates (-1 to 1)
@@ -90,9 +99,9 @@ fn reconstruct_view_position(uv: vec2<f32>, depth: f32) -> vec3<f32> {
 
     var occlusion = 0.0;
 
-    for (var i = 0u; i < KERNEL_SIZE; i++) {
-        let sample_vector = SSAO_KERNEL[i].xyz;
-        let rotated_vector = TBN * sample_vector * RADIUS;
+    for (var i = 0u; i < settings.ssao_kernel_size; i++) {
+        let sample_vector = generate_sample(i, f32(settings.ssao_kernel_size));
+        let rotated_vector = TBN * sample_vector * settings.ssao_radius;
         let view_space_location = view_pos + rotated_vector;
 
         // 1. Project the sample back to the 2D screen
@@ -110,17 +119,17 @@ fn reconstruct_view_position(uv: vec2<f32>, depth: f32) -> vec3<f32> {
         let geometry_view_pos = reconstruct_view_position(offset_uv, sampled_depth);
 
         // Check 1: Is the sample behind the geometry?
-        let is_behind = view_space_location.z + ACNE_BIAS < geometry_view_pos.z;
+        let is_behind = view_space_location.z + settings.ssao_bias < geometry_view_pos.z;
         
         // Check 2: Is the geometry actually close enough to the sample to cast a shadow?
-        let range_check = smoothstep(0.0, 1.0, RADIUS / abs(view_pos.z - geometry_view_pos.z));
+        let range_check = smoothstep(0.0, 1.0, settings.ssao_radius / abs(view_pos.z - geometry_view_pos.z));
         
         if is_behind {
             occlusion += 1.0 * range_check;
         }
     }
     // Convert from [0, 16] to a [0.0, 1.0] ambient light multiplier
-    let ambient_light_factor = pow(1.0 - (occlusion / f32(KERNEL_SIZE)), POWER);
+    let ambient_light_factor = pow(1.0 - (occlusion / f32(settings.ssao_kernel_size)), settings.ssao_power);
     
     return vec4<f32>(vec3<f32>(ambient_light_factor), 1.0);
 }

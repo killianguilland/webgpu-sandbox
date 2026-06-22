@@ -155,6 +155,7 @@ impl ResourceManager {
 
     pub async fn load_material_texture(
         &self,
+        base_dir: &str,
         material: &asset_importer::material::Material,
         scene: &asset_importer::scene::Scene,
         types_to_try: &[TextureType],
@@ -172,13 +173,24 @@ impl ResourceManager {
                 ];
                 if tex_info.path.starts_with('*') {
                     if let Ok(Some(embedded)) = scene.embedded_texture_by_name(&tex_info.path) {
-                        return Ok(Some(
-                            self.load_embedded_texture(&embedded, is_linear, device, queue, address_modes)?,
-                        ));
+                        return Ok(Some(self.load_embedded_texture(
+                            &embedded,
+                            is_linear,
+                            device,
+                            queue,
+                            address_modes,
+                        )?));
                     }
                 } else {
+                    let full_path = std::path::Path::new(base_dir).join(&tex_info.path);
                     return Ok(Some(
-                        self.load_texture(&tex_info.path, is_linear, device, queue, address_modes)
+                        self.load_texture(
+                            full_path.to_str().unwrap(),
+                            is_linear,
+                            device,
+                            queue,
+                            address_modes,
+                        )
                             .await?,
                     ));
                 }
@@ -217,12 +229,19 @@ impl ResourceManager {
             })
             .map_err(|e| anyhow::anyhow!("Assimp error during loading : {:?}", e))?;
 
+        let base_dir = std::path::Path::new(file_name)
+            .parent()
+            .unwrap_or(std::path::Path::new(""))
+            .to_str()
+            .unwrap();
+
         let mut materials = Vec::new();
         for m in scene.materials() {
             let name = m.name();
 
             let diffuse_texture = self
                 .load_material_texture(
+                    base_dir,
                     &m,
                     &scene,
                     &[TextureType::BaseColor, TextureType::Diffuse],
@@ -242,6 +261,7 @@ impl ResourceManager {
 
             let normal_texture = self
                 .load_material_texture(
+                    base_dir,
                     &m,
                     &scene,
                     &[TextureType::Normals, TextureType::Height],
@@ -261,6 +281,7 @@ impl ResourceManager {
 
             let metalness_texture = self
                 .load_material_texture(
+                    base_dir,
                     &m,
                     &scene,
                     &[TextureType::Metalness, TextureType::GltfMetallicRoughness],
@@ -280,6 +301,7 @@ impl ResourceManager {
 
             let roughness_texture = self
                 .load_material_texture(
+                    base_dir,
                     &m,
                     &scene,
                     &[

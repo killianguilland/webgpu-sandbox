@@ -39,17 +39,24 @@ fn vs_main(
     return out;
 }
 
-@group(0)
-@binding(0)
-var hdr_image: texture_2d<f32>;
+@group(0) @binding(0) var hdr_image: texture_2d<f32>;
+@group(0) @binding(1) var hdr_sampler: sampler;
 
-@group(0)
-@binding(1)
-var hdr_sampler: sampler;
+struct SettingsUniform {
+    ambient_intensity: f32,
+    ssao_radius: f32,
+    ssao_bias: f32,
+    ssao_power: f32,
+    hdr_exposure: f32,
+    ssao_kernel_size: u32,
+    _pad1: f32,
+    _pad2: f32,
+};
+@group(1) @binding(0) var<uniform> settings: SettingsUniform;
 
 @fragment
 fn fs_main(vs: VertexOutput) -> @location(0) vec4<f32> {
     let hdr = textureSample(hdr_image, hdr_sampler, vs.uv);
-    let sdr = aces_tone_map(hdr.rgb);
+    let sdr = aces_tone_map(hdr.rgb * settings.hdr_exposure);
     return vec4(sdr, hdr.a);
 }

@@ -42,22 +42,20 @@ impl EngineState {
         let ui = crate::ui::UiState::new(&context);
         let app_ui = crate::ui::AppUi::new();
 
-        let hdr = Hdr::new(&context.device, &context.config);
+        let hdr = Hdr::new(&context.device, &context.config, &renderer.settings_bind_group_layout);
 
         let gbuffer = gbuffer::GBuffer::new(&context.device, &context.config);
 
         let viewer = ModelViewer::new();
 
-        for instance in &viewer.instances {
-            resources
-                .load_model(
-                    &instance.model_name,
-                    &context.device,
-                    &context.queue,
-                    &renderer.texture_bind_group_layout,
-                )
-                .await?;
-        }
+        resources
+            .load_model(
+                &viewer.model_name,
+                &context.device,
+                &context.queue,
+                &renderer.texture_bind_group_layout,
+            )
+            .await?;
 
         let mut settings = crate::settings::RenderSettings::new();
         renderer.add_pass(Box::new(ClearPass));
@@ -138,8 +136,8 @@ impl EngineState {
     }
 
     pub fn update(&mut self, dt: std::time::Duration) {
-        self.viewer.update(dt, &mut self.input, self.settings.animate_light);
-        self.renderer.update(&self.context, &self.viewer);
+        self.viewer.update(dt, &mut self.input, &self.settings);
+        self.renderer.update(&self.context, &self.viewer, &self.settings);
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -190,7 +188,7 @@ impl EngineState {
             &mut self.settings,
         );
 
-        self.hdr_visualizer.process(&mut encoder, &view);
+        self.hdr_visualizer.process(&mut encoder, &view, &self.renderer.settings_bind_group);
 
         if self.settings.debug_mode > 0 {
             self.visualizer.process(
@@ -202,14 +200,33 @@ impl EngineState {
                 self.settings.debug_mode - 1,
             );
         } else {
-            self.hdr_visualizer.process(&mut encoder, &view);
+            self.hdr_visualizer.process(&mut encoder, &view, &self.renderer.settings_bind_group);
         }
 
         let models = &self.resources.models;
+        let mut requested_model = None;
         self.ui.draw(&self.context, &mut encoder, &view, |ui| {
-            self.app_ui
+            requested_model = self.app_ui
                 .show(ui, &self.viewer, models, &mut self.settings);
         });
+
+        if let Some(path_str) = requested_model {
+            log::info!("UI requested model: {}", path_str);
+            pollster::block_on(self.resources.load_model(
+                &path_str,
+                &self.context.device,
+                &self.context.queue,
+                &self.renderer.texture_bind_group_layout,
+            ))
+            .unwrap_or_else(|e| log::error!("Failed to load UI requested model: {}", e));
+
+            self.viewer.model_name = path_str;
+            self.viewer.instances.clear();
+            self.viewer.instances.push(crate::viewer::Instance {
+                position: cgmath::Vector3::new(0.0, 0.0, 0.0),
+                rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
+            });
+        }
 
         self.context.queue.submit(std::iter::once(encoder.finish()));
         output.present();
@@ -274,6 +291,16 @@ impl ApplicationHandler<EngineState> for App {
             return;
         }
 
+        let egui_ctx = state.ui.winit_state.egui_ctx();
+        
+        if egui_ctx.egui_wants_pointer_input() && matches!(event, WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. }) {
+            return;
+        }
+        
+        if egui_ctx.egui_wants_keyboard_input() && matches!(event, WindowEvent::KeyboardInput { .. }) {
+            return;
+        }
+
         if state.input.process_event(&event) {
             return;
         }
@@ -322,9 +349,9 @@ impl ApplicationHandler<EngineState> for App {
                     ))
                     .unwrap_or_else(|e| log::error!("Failed to load dropped model: {}", e));
 
+                    state.viewer.model_name = path_str;
                     state.viewer.instances.clear();
                     state.viewer.instances.push(crate::viewer::Instance {
-                        model_name: path_str,
                         position: cgmath::Vector3::new(0.0, 0.0, 0.0),
                         rotation: cgmath::Quaternion::new(1.0, 0.0, 0.0, 0.0),
                     });
