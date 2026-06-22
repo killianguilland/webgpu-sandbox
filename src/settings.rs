@@ -24,6 +24,7 @@ pub struct RenderSettings {
     pub resolution_scale: f32,
 
     pub changed: bool,
+    pub light_follows_camera: bool,
 }
 
 impl RenderSettings {
@@ -48,6 +49,7 @@ impl RenderSettings {
             resolution_scale: 1.0,
 
             changed: true,
+            light_follows_camera: false,
         }
     }
 

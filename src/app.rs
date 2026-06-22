@@ -157,6 +157,14 @@ impl EngineState {
             self.resize(size.width, size.height);
         }
 
+        if self.settings.light_follows_camera {
+            self.settings.light_position = [
+                self.viewer.camera.position.x,
+                self.viewer.camera.position.y,
+                self.viewer.camera.position.z,
+            ];
+        }
+
         self.viewer.update(dt, &mut self.input, &self.settings);
         self.renderer
             .update(&self.context, &self.viewer, &self.settings);

@@ -213,6 +213,7 @@ impl AppUi {
                     window_ui.separator();
 
                     window_ui.heading("Lighting");
+                    window_ui.checkbox(&mut settings.light_follows_camera, "Follows camera");
                     window_ui.horizontal(|ui| {
                         ui.label("Position");
                         ui.add(
