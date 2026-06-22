@@ -84,6 +84,12 @@ fn vs_main(
 
 // Fragment shader
 
+struct MaterialUniform {
+    base_color_factor: vec4<f32>,
+    emissive_occlusion: vec4<f32>,
+    mr_factors: vec4<f32>,
+}
+
 @group(0) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(0)@binding(1) var s_diffuse: sampler;
 @group(0)@binding(2) var t_normal: texture_2d<f32>;
@@ -92,13 +98,11 @@ fn vs_main(
 @group(0) @binding(5) var s_metallic: sampler;
 @group(0) @binding(6) var t_roughness: texture_2d<f32>;
 @group(0) @binding(7) var s_roughness: sampler;
-
-struct MaterialUniform {
-    base_color_factor: vec4<f32>,
-    emissive_occlusion: vec4<f32>,
-    mr_factors: vec4<f32>,
-}
-@group(0) @binding(8) var<uniform> material: MaterialUniform;
+@group(0) @binding(8) var t_emissive: texture_2d<f32>;
+@group(0) @binding(9) var s_emissive: sampler;
+@group(0) @binding(10) var t_occlusion: texture_2d<f32>;
+@group(0) @binding(11) var s_occlusion: sampler;
+@group(0) @binding(12) var<uniform> material: MaterialUniform;
 
 @group(3)
 @binding(0)
@@ -110,13 +114,18 @@ var env_sampler: sampler;
 struct GBufferOutput {
     @location(0) albedo: vec4<f32>,
     @location(1) normal: vec4<f32>,
-    @location(2) pbr: vec2<f32>,
+    @location(2) pbr: vec4<f32>,
+    @location(3) emissive: vec4<f32>,
 };
 
 @fragment
 fn fs_main(in: VertexOutput) -> GBufferOutput {
     // ALBEDO
     let albedo = textureSample(t_diffuse, s_diffuse, in.tex_coords) * material.base_color_factor;
+
+    if albedo.a < material.mr_factors.w {
+        discard;
+    }
 
     // NORMAL
     //let normal = vec4<f32>(normalize(in.world_normal), 1.0); // This is the triangle's normal (without the normal map texture)
@@ -156,7 +165,10 @@ fn fs_main(in: VertexOutput) -> GBufferOutput {
     // PBR
     let metallic = textureSample(t_metallic, s_metallic, in.tex_coords).b * material.mr_factors.x;
     let roughness = textureSample(t_roughness, s_roughness, in.tex_coords).g * material.mr_factors.y;
-    let pbr = vec2<f32>(metallic, roughness);
+    let occlusion = textureSample(t_occlusion, s_occlusion, in.tex_coords).r * material.emissive_occlusion.w;
+    let pbr = vec4<f32>(metallic, roughness, occlusion, 1.0);
 
-    return GBufferOutput(albedo, normal_out, pbr);
+    let emissive = textureSample(t_emissive, s_emissive, in.tex_coords).rgb * material.emissive_occlusion.xyz;
+
+    return GBufferOutput(albedo, normal_out, pbr, vec4<f32>(emissive, 1.0));
 }

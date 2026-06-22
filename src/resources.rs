@@ -312,10 +312,12 @@ impl ResourceManager {
                 )
                 .await?
                 .unwrap_or_else(|| {
-                    texture::Texture::fallback_diffuse(
+                    texture::Texture::from_solid_rgba(
                         device,
                         queue,
+                        [100, 100, 100, 255],
                         Some(&format!("{}::diffuse_fallback", name)),
+                        false,
                     )
                     .unwrap()
                 });
@@ -332,10 +334,12 @@ impl ResourceManager {
                 )
                 .await?
                 .unwrap_or_else(|| {
-                    texture::Texture::fallback_normal(
+                    texture::Texture::from_solid_rgba(
                         device,
                         queue,
+                        [128, 128, 255, 255],
                         Some(&format!("{}::normal_fallback", name)),
+                        true,
                     )
                     .unwrap()
                 });
@@ -352,10 +356,12 @@ impl ResourceManager {
                 )
                 .await?
                 .unwrap_or_else(|| {
-                    texture::Texture::fallback_metalness(
+                    texture::Texture::from_solid_rgba(
                         device,
                         queue,
+                        [0, 0, 0, 255],
                         Some(&format!("{}::metalness_fallback", name)),
+                        true,
                     )
                     .unwrap()
                 });
@@ -375,10 +381,55 @@ impl ResourceManager {
                 )
                 .await?
                 .unwrap_or_else(|| {
-                    texture::Texture::fallback_roughness(
+                    texture::Texture::from_solid_rgba(
                         device,
                         queue,
+                        [128, 128, 128, 255],
                         Some(&format!("{}::roughness_fallback", name)),
+                        true,
+                    )
+                    .unwrap()
+                });
+
+            let emissive_texture = self
+                .load_material_texture(
+                    base_dir,
+                    &m,
+                    &scene,
+                    &[asset_importer::TextureType::Emissive],
+                    true, // Emissive is usually sRGB, but because we multiply it by intensity, keeping it true (linear) is sometimes preferred in HDR pipelines. Let's stick with true for now!
+                    device,
+                    queue,
+                )
+                .await?
+                .unwrap_or_else(|| {
+                    texture::Texture::from_solid_rgba(
+                        device,
+                        queue,
+                        [0, 0, 0, 255],
+                        Some(&format!("{}::emissive_fallback", name)),
+                        true,
+                    )
+                    .unwrap()
+                });
+            let occlusion_texture = self
+                .load_material_texture(
+                    base_dir,
+                    &m,
+                    &scene,
+                    &[asset_importer::TextureType::AmbientOcclusion],
+                    true, // AO is linear data
+                    device,
+                    queue,
+                )
+                .await?
+                .unwrap_or_else(|| {
+                    texture::Texture::from_solid_rgba(
+                        device,
+                        queue,
+                        [255, 255, 255, 255],
+                        Some(&format!("{}::occlusion_fallback", name)),
+                        true,
                     )
                     .unwrap()
                 });
@@ -433,6 +484,8 @@ impl ResourceManager {
                 normal_texture,
                 roughness_texture,
                 metalness_texture,
+                emissive_texture,
+                occlusion_texture,
                 layout,
                 is_transparent,
                 uniforms,

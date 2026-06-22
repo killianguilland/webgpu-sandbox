@@ -118,6 +118,12 @@ fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
 
 // Fragment shader
 
+struct MaterialUniform {
+    base_color_factor: vec4<f32>,
+    emissive_occlusion: vec4<f32>,
+    mr_factors: vec4<f32>,
+}
+
 @group(0) @binding(0) var t_diffuse: texture_2d<f32>;
 @group(0)@binding(1) var s_diffuse: sampler;
 @group(0)@binding(2) var t_normal: texture_2d<f32>;
@@ -126,13 +132,11 @@ fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
 @group(0) @binding(5) var s_metallic: sampler;
 @group(0) @binding(6) var t_roughness: texture_2d<f32>;
 @group(0) @binding(7) var s_roughness: sampler;
-
-struct MaterialUniform {
-    base_color_factor: vec4<f32>,
-    emissive_occlusion: vec4<f32>,
-    mr_factors: vec4<f32>,
-}
-@group(0) @binding(8) var<uniform> material: MaterialUniform;
+@group(0) @binding(8) var t_emissive: texture_2d<f32>;
+@group(0) @binding(9) var s_emissive: sampler;
+@group(0) @binding(10) var t_occlusion: texture_2d<f32>;
+@group(0) @binding(11) var s_occlusion: sampler;
+@group(0) @binding(12) var<uniform> material: MaterialUniform; 
 
 @group(3)
 @binding(0)
@@ -149,6 +153,10 @@ var env_sampler: sampler;
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // ALBEDO
     let albedo = textureSample(t_diffuse, s_diffuse, in.tex_coords) * material.base_color_factor;
+
+    if albedo.a < material.mr_factors.w {
+        discard;
+    }
 
     // Optional: If it's effectively invisible, don't waste GPU cycles
     //if albedo.a < 0.01 { discard; }
@@ -191,6 +199,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // PBR
     let metallic = textureSample(t_metallic, s_metallic, in.tex_coords).b * material.mr_factors.x;
     let roughness = textureSample(t_roughness, s_roughness, in.tex_coords).g * material.mr_factors.y;
+    let occlusion = textureSample(t_occlusion, s_occlusion, in.tex_coords).r * material.emissive_occlusion.w;
 
     // 3. PBR Vectors
     let N = final_world_normal; // Normal Vector
@@ -240,14 +249,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     // Sample the exact pixel from the screen-space SSAO texture
     let ssao_factor = textureLoad(t_ssao, vec2<i32>(in.clip_position.xy), 0).r;
+    let final_occlusion = ssao_factor * occlusion; // We merge baked occlusion and ssao
 
-    let diffuse_ambient = kD_ibl * albedo.rgb * 0.03 * ssao_factor;
-    let specular_ambient = reflection * kS_ibl * ssao_factor;
+    let diffuse_ambient = kD_ibl * albedo.rgb * 0.03 * final_occlusion;
+    let specular_ambient = reflection * kS_ibl * final_occlusion;
 
     // 10. PRE-MULTIPLY ALPHA!
     let final_diffuse = (diffuse_light + diffuse_ambient) * albedo.a;
     let final_specular = specular_light + specular_ambient;
 
-    let lit_color = final_diffuse + final_specular;
+    let emissive = textureSample(t_emissive, s_emissive, in.tex_coords).rgb * material.emissive_occlusion.xyz;
+
+    let lit_color = final_diffuse + final_specular + (emissive * albedo.a);
     return vec4<f32>(lit_color, albedo.a);
 }

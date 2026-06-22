@@ -201,7 +201,8 @@ pub trait RenderPass {
         viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
         context: &GraphicsContext,
-        renderer: &Renderer, settings: &crate::settings::RenderSettings,
+        renderer: &Renderer,
+        settings: &crate::settings::RenderSettings,
     );
 }
 
@@ -417,6 +418,38 @@ impl Renderer {
                     wgpu::BindGroupLayoutEntry {
                         binding: 8,
                         visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 9,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 10,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 11,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 12, // Moved from 8 to 12!
+                        visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
@@ -631,7 +664,9 @@ impl Renderer {
                 }
             }
 
-            pass.render(encoder, view, gbuffer, viewer, resources, context, self, settings);
+            pass.render(
+                encoder, view, gbuffer, viewer, resources, context, self, settings,
+            );
         }
     }
 }

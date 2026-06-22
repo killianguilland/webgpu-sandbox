@@ -10,7 +10,7 @@ pub struct Texture {
 }
 
 impl Texture {
-    fn from_solid_rgba(
+    pub fn from_solid_rgba(
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         rgba: [u8; 4],
@@ -49,37 +49,37 @@ impl Texture {
         )
     }
 
-    pub fn fallback_diffuse(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        label: Option<&str>,
-    ) -> Result<Self> {
-        Self::from_solid_rgba(device, queue, [100, 100, 100, 255], label, false)
-    }
+    // pub fn fallback_diffuse(
+    //     device: &wgpu::Device,
+    //     queue: &wgpu::Queue,
+    //     label: Option<&str>,
+    // ) -> Result<Self> {
+    //     Self::from_solid_rgba(device, queue, [100, 100, 100, 255], label, false)
+    // }
 
-    pub fn fallback_normal(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        label: Option<&str>,
-    ) -> Result<Self> {
-        Self::from_solid_rgba(device, queue, [128, 128, 255, 255], label, true)
-    }
+    // pub fn fallback_normal(
+    //     device: &wgpu::Device,
+    //     queue: &wgpu::Queue,
+    //     label: Option<&str>,
+    // ) -> Result<Self> {
+    //     Self::from_solid_rgba(device, queue, [128, 128, 255, 255], label, true)
+    // }
 
-    pub fn fallback_metalness(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        label: Option<&str>,
-    ) -> Result<Self> {
-        Self::from_solid_rgba(device, queue, [0, 0, 0, 255], label, true)
-    }
+    // pub fn fallback_metalness(
+    //     device: &wgpu::Device,
+    //     queue: &wgpu::Queue,
+    //     label: Option<&str>,
+    // ) -> Result<Self> {
+    //     Self::from_solid_rgba(device, queue, [0, 0, 0, 255], label, true)
+    // }
 
-    pub fn fallback_roughness(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        label: Option<&str>,
-    ) -> Result<Self> {
-        Self::from_solid_rgba(device, queue, [128, 128, 128, 255], label, true)
-    }
+    // pub fn fallback_roughness(
+    //     device: &wgpu::Device,
+    //     queue: &wgpu::Queue,
+    //     label: Option<&str>,
+    // ) -> Result<Self> {
+    //     Self::from_solid_rgba(device, queue, [128, 128, 128, 255], label, true)
+    // }
 
     pub fn from_bytes(
         device: &wgpu::Device,
@@ -361,7 +361,12 @@ pub struct RenderTarget {
 }
 
 impl RenderTarget {
-    pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, format: wgpu::TextureFormat, label: &str) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        config: &wgpu::SurfaceConfiguration,
+        format: wgpu::TextureFormat,
+        label: &str,
+    ) -> Self {
         let texture = Texture::create_render_target(device, config, format, label);
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -390,8 +395,14 @@ impl RenderTarget {
             label: Some(&format!("{} Bind Group", label)),
             layout: &bind_group_layout,
             entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: wgpu::BindingResource::TextureView(&texture.view) },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::Sampler(&texture.sampler) },
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&texture.sampler),
+                },
             ],
         });
 

@@ -14,7 +14,7 @@ pub struct GBuffer {
 impl GBuffer {
     pub const ALBEDO_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     pub const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
-    pub const PBR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg8Unorm;
+    pub const PBR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {

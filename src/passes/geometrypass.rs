@@ -13,7 +13,7 @@ impl GeometryPass {
         context: &GraphicsContext,
         renderer: &Renderer,
         _settings: &crate::settings::RenderSettings,
-        _hdr_format: wgpu::TextureFormat,
+        hdr_format: wgpu::TextureFormat,
     ) -> Self {
         let render_pipeline_layout =
             context
@@ -71,6 +71,18 @@ impl GeometryPass {
                                 blend: None,
                                 write_mask: wgpu::ColorWrites::ALL,
                             }),
+                            Some(wgpu::ColorTargetState {
+                                format: hdr_format,
+                                blend: Some(wgpu::BlendState {
+                                    color: wgpu::BlendComponent {
+                                        src_factor: wgpu::BlendFactor::One,
+                                        dst_factor: wgpu::BlendFactor::One,
+                                        operation: wgpu::BlendOperation::Add,
+                                    },
+                                    alpha: wgpu::BlendComponent::REPLACE,
+                                }),
+                                write_mask: wgpu::ColorWrites::ALL,
+                            }),
                         ],
                         compilation_options: Default::default(),
                     }),
@@ -103,7 +115,7 @@ impl RenderPass for GeometryPass {
     fn render(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        _view: &wgpu::TextureView, // not used cause we only draw to the gbuffer
+        view: &wgpu::TextureView,
         gbuffer: &crate::gbuffer::GBuffer,
         viewer: &ModelViewer,
         resources: &crate::resources::ResourceManager,
@@ -134,6 +146,15 @@ impl RenderPass for GeometryPass {
                 }),
                 Some(wgpu::RenderPassColorAttachment {
                     view: &gbuffer.pbr.view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view,
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {

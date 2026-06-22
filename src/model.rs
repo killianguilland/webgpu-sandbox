@@ -97,6 +97,10 @@ pub struct Material {
     pub metalness_texture: texture::Texture,
     #[allow(unused)]
     pub roughness_texture: texture::Texture,
+    #[allow(unused)]
+    pub emissive_texture: texture::Texture,
+    #[allow(unused)]
+    pub occlusion_texture: texture::Texture,
     pub uniforms: MaterialUniform,
     pub uniform_buffer: wgpu::Buffer,
     pub bind_group: wgpu::BindGroup,
@@ -111,6 +115,8 @@ impl Material {
         normal_texture: texture::Texture,
         metalness_texture: texture::Texture,
         roughness_texture: texture::Texture,
+        emissive_texture: texture::Texture,
+        occlusion_texture: texture::Texture,
         layout: &wgpu::BindGroupLayout,
         is_transparent: bool,
         uniforms: MaterialUniform,
@@ -158,6 +164,22 @@ impl Material {
                 },
                 wgpu::BindGroupEntry {
                     binding: 8,
+                    resource: wgpu::BindingResource::TextureView(&emissive_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 9,
+                    resource: wgpu::BindingResource::Sampler(&emissive_texture.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 10,
+                    resource: wgpu::BindingResource::TextureView(&occlusion_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 11,
+                    resource: wgpu::BindingResource::Sampler(&occlusion_texture.sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 12,
                     resource: uniform_buffer.as_entire_binding(),
                 },
             ],
@@ -170,6 +192,8 @@ impl Material {
             normal_texture,
             roughness_texture,
             metalness_texture,
+            occlusion_texture,
+            emissive_texture,
             bind_group,
             is_transparent,
             uniforms,
@@ -316,7 +340,7 @@ where
                     self.draw_mesh_instanced(
                         mesh,
                         material,
-                    instances.clone(),
+                        instances.clone(),
                         camera_bind_group,
                         light_bind_group,
                     );

@@ -112,9 +112,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // 2. Read G-Buffer Data
     let albedo = textureSample(t_albedo, s_sampler, in.uv).rgb;
     let normal = normalize(textureSample(t_normal, s_sampler, in.uv).xyz);
-    let pbr = textureSample(t_pbr, s_sampler, in.uv).rg;
+    let pbr = textureSample(t_pbr, s_sampler, in.uv).rgb;
     let metallic = pbr.r;
     let roughness = pbr.g;
+    let occlusion = pbr.b;
     // 3. PBR Vectors
     let N = normal; // Normal Vector
     let V = normalize(camera.view_pos.xyz - world_position.xyz); // View Vector
@@ -163,7 +164,9 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Sample SSAO from texture
     let ssao_factor = textureSample(t_ssao, s_ssao, in.uv).r;
 
-    let final_ambient = (diffuse_ambient + specular_ambient) * ssao_factor;
+    let final_occlusion = ssao_factor * occlusion;
+
+    let final_ambient = (diffuse_ambient + specular_ambient) * final_occlusion;
 
     return vec4<f32>(final_ambient + Lo, 1.0);
 }

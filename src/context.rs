@@ -37,6 +37,7 @@ impl GraphicsContext {
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 required_limits: wgpu::Limits {
                     max_bind_groups: 6,
+                    max_color_attachment_bytes_per_sample: 64,
                     ..wgpu::Limits::default()
                 },
                 memory_hints: Default::default(),
