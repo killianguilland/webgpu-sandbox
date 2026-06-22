@@ -21,6 +21,8 @@ pub struct RenderSettings {
     pub hdr_exposure: f32,
     pub camera_fov: f32,
 
+    pub resolution_scale: f32,
+
     pub changed: bool,
 }
 
@@ -42,6 +44,8 @@ impl RenderSettings {
 
             hdr_exposure: 1.0,
             camera_fov: 45.0,
+
+            resolution_scale: 1.0,
 
             changed: true,
         }

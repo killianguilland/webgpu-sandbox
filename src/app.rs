@@ -137,15 +137,26 @@ impl EngineState {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.context.resize(width, height);
-        self.renderer
-            .resize(&self.context.device, &self.context.config);
+
+        let scaled_width = (width as f32 * self.settings.resolution_scale).max(1.0) as u32;
+        let scaled_height = (height as f32 * self.settings.resolution_scale).max(1.0) as u32;
+
+        let mut scaled_config = self.context.config.clone();
+        scaled_config.width = scaled_width;
+        scaled_config.height = scaled_height;
+
+        self.renderer.resize(&self.context.device, &scaled_config);
         self.hdr_visualizer
-            .resize(&self.context.device, width, height);
-        self.gbuffer
-            .resize(&self.context.device, &self.context.config);
+            .resize(&self.context.device, scaled_width, scaled_height);
+        self.gbuffer.resize(&self.context.device, &scaled_config);
     }
 
     pub fn update(&mut self, dt: std::time::Duration) {
+        if self.settings.changed {
+            let size = self.context.window.inner_size();
+            self.resize(size.width, size.height);
+        }
+
         self.viewer.update(dt, &mut self.input, &self.settings);
         self.renderer
             .update(&self.context, &self.viewer, &self.settings);

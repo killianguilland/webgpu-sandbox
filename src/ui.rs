@@ -254,6 +254,34 @@ impl AppUi {
 
                     window_ui.separator();
 
+                    window_ui.heading("Resolution");
+                    window_ui.horizontal(|ui| {
+                        ui.label("Scale:");
+                        let mut scale_changed = false;
+                        egui::ComboBox::from_id_salt("res_scale")
+                            .selected_text(format!("{}x", settings.resolution_scale))
+                            .show_ui(ui, |ui| {
+                                scale_changed |= ui
+                                    .selectable_value(&mut settings.resolution_scale, 1.0, "1.0x")
+                                    .changed();
+                                scale_changed |= ui
+                                    .selectable_value(&mut settings.resolution_scale, 0.5, "0.5x")
+                                    .changed();
+                                scale_changed |= ui
+                                    .selectable_value(&mut settings.resolution_scale, 0.25, "0.25x")
+                                    .changed();
+                                scale_changed |= ui
+                                    .selectable_value(&mut settings.resolution_scale, 0.1, "0.1x")
+                                    .changed();
+                            });
+
+                        if scale_changed {
+                            settings.changed = true;
+                        }
+                    });
+
+                    window_ui.separator();
+
                     window_ui.heading("SSAO Settings");
                     window_ui.horizontal(|ui| {
                         ui.label("Samples");
