@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MeshFilter {
-    All,
+    //All, // Will be useful for shadow maps
     TransparentsOnly,
     OpaqueOnly,
 }
@@ -61,9 +61,19 @@ impl Vertex for ModelVertex {
     }
 }
 
+pub struct Node {
+    pub name: String,
+    pub local_transform: [[f32; 4]; 4],
+    pub global_transform: [[f32; 4]; 4],
+    pub mesh_indices: Vec<usize>, // Which meshes this node renders
+}
+
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
+    pub nodes: Vec<Node>,
+    pub node_buffer: wgpu::Buffer,
+    pub hierarchy_bind_group: wgpu::BindGroup,
 }
 
 #[repr(C)]
@@ -285,23 +295,32 @@ where
         light_bind_group: &'a wgpu::BindGroup,
         mesh_filter: MeshFilter,
     ) {
-        for mesh in &model.meshes {
-            let material = &model.materials[mesh.material];
-            
-            let should_draw = match mesh_filter {
-                MeshFilter::All => true,
-                MeshFilter::TransparentsOnly => material.is_transparent,
-                MeshFilter::OpaqueOnly => !material.is_transparent,
-            };
+        for (i, node) in model.nodes.iter().enumerate() {
+            // 1. Calculate dynamic offset for this specific node
+            let dynamic_offset = i as u32 * 256;
 
-            if should_draw {
-                self.draw_mesh_instanced(
-                    mesh,
-                    material,
+            // 2. Bind the hierarchy group at index 4 with the offset!
+            self.set_bind_group(4, &model.hierarchy_bind_group, &[dynamic_offset]);
+
+            // 3. Draw all meshes attached to this node
+            for &mesh_idx in &node.mesh_indices {
+                let mesh = &model.meshes[mesh_idx];
+                let material = &model.materials[mesh.material];
+
+                let should_draw = match mesh_filter {
+                    MeshFilter::TransparentsOnly => material.is_transparent,
+                    MeshFilter::OpaqueOnly => !material.is_transparent,
+                };
+
+                if should_draw {
+                    self.draw_mesh_instanced(
+                        mesh,
+                        material,
                     instances.clone(),
-                    camera_bind_group,
-                    light_bind_group,
-                );
+                        camera_bind_group,
+                        light_bind_group,
+                    );
+                }
             }
         }
     }

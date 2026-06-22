@@ -59,7 +59,7 @@ pub struct ModelViewer {
 
 impl ModelViewer {
     pub fn new() -> Self {
-        let camera = Camera::new((0.0, 1.0, 2.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let camera = Camera::new((0.0, 2.0, 2.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
         let camera_controller = CameraController::new(4.0, 0.4);
 
         let instances = vec![Instance {
@@ -83,7 +83,12 @@ impl ModelViewer {
         }
     }
 
-    pub fn update(&mut self, dt: Duration, input: &mut Input, settings: &crate::settings::RenderSettings) {
+    pub fn update(
+        &mut self,
+        dt: Duration,
+        input: &mut Input,
+        settings: &crate::settings::RenderSettings,
+    ) {
         self.camera_controller
             .update_camera(&mut self.camera, dt, input);
 

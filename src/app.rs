@@ -42,11 +42,17 @@ impl EngineState {
         let ui = crate::ui::UiState::new(&context);
         let app_ui = crate::ui::AppUi::new();
 
-        let hdr = Hdr::new(&context.device, &context.config, &renderer.settings_bind_group_layout);
+        let hdr = Hdr::new(
+            &context.device,
+            &context.config,
+            &renderer.settings_bind_group_layout,
+        );
 
         let gbuffer = gbuffer::GBuffer::new(&context.device, &context.config);
 
         let viewer = ModelViewer::new();
+
+
 
         resources
             .load_model(
@@ -54,6 +60,7 @@ impl EngineState {
                 &context.device,
                 &context.queue,
                 &renderer.texture_bind_group_layout,
+                &renderer.hierarchy_layout,
             )
             .await?;
 
@@ -70,18 +77,9 @@ impl EngineState {
         settings.pass_states.insert("Geometry".to_string(), true);
         let ssao_pass = SsaoPass::new(&context, &renderer, &gbuffer);
         let blur_pass = BlurPass::new(&context, &renderer);
-        let visualizer = Visualizer::new(
-            &context.device,
-            context.config.format,
-            &gbuffer,
-            &renderer,
-        );
-        let lighting_pass = LightingPass::new(
-            &context,
-            &renderer,
-            &gbuffer,
-            hdr.format(),
-        );
+        let visualizer =
+            Visualizer::new(&context.device, context.config.format, &gbuffer, &renderer);
+        let lighting_pass = LightingPass::new(&context, &renderer, &gbuffer, hdr.format());
         // Now that everyone who needs to look at the texture is done,
         // we can finally hand ownership of the passes over to the renderer!
         renderer.add_pass(Box::new(ssao_pass));
@@ -128,7 +126,8 @@ impl EngineState {
 
     pub fn resize(&mut self, width: u32, height: u32) {
         self.context.resize(width, height);
-        self.renderer.resize(&self.context.device, &self.context.config);
+        self.renderer
+            .resize(&self.context.device, &self.context.config);
         self.hdr_visualizer
             .resize(&self.context.device, width, height);
         self.gbuffer
@@ -137,7 +136,8 @@ impl EngineState {
 
     pub fn update(&mut self, dt: std::time::Duration) {
         self.viewer.update(dt, &mut self.input, &self.settings);
-        self.renderer.update(&self.context, &self.viewer, &self.settings);
+        self.renderer
+            .update(&self.context, &self.viewer, &self.settings);
     }
 
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -188,7 +188,8 @@ impl EngineState {
             &mut self.settings,
         );
 
-        self.hdr_visualizer.process(&mut encoder, &view, &self.renderer.settings_bind_group);
+        self.hdr_visualizer
+            .process(&mut encoder, &view, &self.renderer.settings_bind_group);
 
         if self.settings.debug_mode > 0 {
             self.visualizer.process(
@@ -200,13 +201,15 @@ impl EngineState {
                 self.settings.debug_mode - 1,
             );
         } else {
-            self.hdr_visualizer.process(&mut encoder, &view, &self.renderer.settings_bind_group);
+            self.hdr_visualizer
+                .process(&mut encoder, &view, &self.renderer.settings_bind_group);
         }
 
         let models = &self.resources.models;
         let mut requested_model = None;
         self.ui.draw(&self.context, &mut encoder, &view, |ui| {
-            requested_model = self.app_ui
+            requested_model = self
+                .app_ui
                 .show(ui, &self.viewer, models, &mut self.settings);
         });
 
@@ -217,6 +220,7 @@ impl EngineState {
                 &self.context.device,
                 &self.context.queue,
                 &self.renderer.texture_bind_group_layout,
+                &self.renderer.hierarchy_layout,
             ))
             .unwrap_or_else(|e| log::error!("Failed to load UI requested model: {}", e));
 
@@ -292,12 +296,19 @@ impl ApplicationHandler<EngineState> for App {
         }
 
         let egui_ctx = state.ui.winit_state.egui_ctx();
-        
-        if egui_ctx.egui_wants_pointer_input() && matches!(event, WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. }) {
+
+        if egui_ctx.egui_wants_pointer_input()
+            && matches!(
+                event,
+                WindowEvent::MouseInput { .. } | WindowEvent::MouseWheel { .. }
+            )
+        {
             return;
         }
-        
-        if egui_ctx.egui_wants_keyboard_input() && matches!(event, WindowEvent::KeyboardInput { .. }) {
+
+        if egui_ctx.egui_wants_keyboard_input()
+            && matches!(event, WindowEvent::KeyboardInput { .. })
+        {
             return;
         }
 
@@ -346,6 +357,7 @@ impl ApplicationHandler<EngineState> for App {
                         &state.context.device,
                         &state.context.queue,
                         &state.renderer.texture_bind_group_layout,
+                        &state.renderer.hierarchy_layout,
                     ))
                     .unwrap_or_else(|e| log::error!("Failed to load dropped model: {}", e));
 

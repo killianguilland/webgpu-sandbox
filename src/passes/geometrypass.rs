@@ -24,6 +24,7 @@ impl GeometryPass {
                         Some(&renderer.camera_bind_group_layout),
                         Some(&renderer.light_bind_group_layout),
                         Some(&renderer.environment_layout),
+                        Some(&renderer.hierarchy_layout),
                     ],
                     immediate_size: 0,
                 });

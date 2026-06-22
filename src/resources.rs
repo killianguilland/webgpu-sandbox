@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use wgpu::util::DeviceExt;
+use wgpu::{util::DeviceExt, wgc::global};
 
 use image::codecs::hdr::HdrDecoder;
 
@@ -16,6 +16,59 @@ fn map_address_mode(mode: asset_importer::material::TextureMapMode) -> wgpu::Add
         asset_importer::material::TextureMapMode::Mirror => wgpu::AddressMode::MirrorRepeat,
         asset_importer::material::TextureMapMode::Decal => wgpu::AddressMode::ClampToEdge,
         asset_importer::material::TextureMapMode::Other(_) => wgpu::AddressMode::Repeat,
+    }
+}
+
+fn process_node(
+    assimp_node: &asset_importer::node::Node,
+    parent_global_transform: glam::Mat4,
+    flat_nodes: &mut Vec<model::Node>,
+) {
+    // 1. Get the local transform from `assimp_node` and convert it to your math library's Mat4
+    let assimp_transform = assimp_node.transformation();
+    let local_transform = glam::Mat4::from_cols(
+        glam::Vec4::new(
+            assimp_transform.x_axis.x,
+            assimp_transform.x_axis.y,
+            assimp_transform.x_axis.z,
+            assimp_transform.x_axis.w,
+        ),
+        glam::Vec4::new(
+            assimp_transform.y_axis.x,
+            assimp_transform.y_axis.y,
+            assimp_transform.y_axis.z,
+            assimp_transform.y_axis.w,
+        ),
+        glam::Vec4::new(
+            assimp_transform.z_axis.x,
+            assimp_transform.z_axis.y,
+            assimp_transform.z_axis.z,
+            assimp_transform.z_axis.w,
+        ),
+        glam::Vec4::new(
+            assimp_transform.w_axis.x,
+            assimp_transform.w_axis.y,
+            assimp_transform.w_axis.z,
+            assimp_transform.w_axis.w,
+        ),
+    );
+
+    // 2. Calculate global: global_transform = parent_global_transform * local_transform;
+    let global_transform = parent_global_transform * local_transform;
+
+    // 3. Push to flat_nodes
+    let node = model::Node {
+        name: assimp_node.name().to_string(),
+        local_transform: local_transform.to_cols_array_2d(),
+        global_transform: global_transform.to_cols_array_2d(),
+        mesh_indices: assimp_node.mesh_indices().collect(),
+    };
+    flat_nodes.push(node);
+
+    // 4. Recursively call process_node for each child in assimp_node.children()
+    for child in assimp_node.children() {
+        // Pass the child, our global_transform as its parent, and the mutable list
+        process_node(&child, global_transform, flat_nodes);
     }
 }
 
@@ -130,7 +183,14 @@ impl ResourceManager {
     ) -> anyhow::Result<texture::Texture> {
         match tex.data() {
             Ok(asset_importer::texture::TextureData::Compressed(bytes)) => {
-                texture::Texture::from_bytes(device, queue, &bytes, "embedded", is_linear, address_modes)
+                texture::Texture::from_bytes(
+                    device,
+                    queue,
+                    &bytes,
+                    "embedded",
+                    is_linear,
+                    address_modes,
+                )
             }
             Ok(asset_importer::texture::TextureData::Texels(texels)) => {
                 let (width, height) = tex.dimensions();
@@ -191,7 +251,7 @@ impl ResourceManager {
                             queue,
                             address_modes,
                         )
-                            .await?,
+                        .await?,
                     ));
                 }
             }
@@ -205,6 +265,7 @@ impl ResourceManager {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         layout: &wgpu::BindGroupLayout,
+        hierarchy_layout: &wgpu::BindGroupLayout,
     ) -> anyhow::Result<()> {
         if self.models.contains_key(file_name) {
             return Ok(());
@@ -457,7 +518,70 @@ impl ResourceManager {
             });
         }
 
-        let model = model::Model { meshes, materials };
+        let mut flat_nodes = Vec::new();
+
+        process_node(
+            &scene.root_node().unwrap(),
+            glam::Mat4::IDENTITY,
+            &mut flat_nodes,
+        );
+
+        let node_matrices: Vec<[[f32; 4]; 4]> =
+            flat_nodes.iter().map(|n| n.global_transform).collect();
+
+        let node_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(&format!("{:?} Node Buffer", file_name)),
+            contents: bytemuck::cast_slice(&node_matrices),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // 1. Calculate padded size (256 bytes)
+        let alignment = 256 as wgpu::BufferAddress;
+
+        // 2. Create a flat vector of bytes (initialized to zero)
+        let mut dynamic_uniform_data = vec![0u8; (alignment * flat_nodes.len() as u64) as usize];
+
+        // 3. Insert each node_index into its padded 256-byte slot
+        for (i, _) in flat_nodes.iter().enumerate() {
+            let offset = (i as u64 * alignment) as usize;
+            let bytes = (i as u32).to_le_bytes(); // Convert our u32 index to raw bytes
+            dynamic_uniform_data[offset..offset + 4].copy_from_slice(&bytes);
+        }
+
+        // 4. Create the buffer!
+        let dynamic_uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Dynamic Node Index Buffer"),
+            contents: &dynamic_uniform_data,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // 5. Create the single bind group for the whole model
+        let hierarchy_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: hierarchy_layout, // <-- Add this parameter to load_model's signature!
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: node_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                        buffer: &dynamic_uniform_buffer,
+                        offset: 0,
+                        size: wgpu::BufferSize::new(4), // We only read 4 bytes at a time!
+                    }),
+                },
+            ],
+            label: Some("Model Hierarchy Bind Group"),
+        });
+
+        let model = model::Model {
+            meshes,
+            materials,
+            nodes: flat_nodes,
+            node_buffer,
+            hierarchy_bind_group,
+        };
         self.models.insert(file_name.to_string(), model);
 
         Ok(())

@@ -232,6 +232,7 @@ pub struct Renderer {
     passes: Vec<Box<dyn RenderPass>>,
     pub ssao_target: crate::texture::RenderTarget,
     pub blur_target: crate::texture::RenderTarget,
+    pub hierarchy_layout: wgpu::BindGroupLayout,
 }
 
 impl Renderer {
@@ -450,6 +451,33 @@ impl Renderer {
                 ],
             });
 
+        let hierarchy_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Hierarchy Bind Group Layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0, // The SSBO
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1, // The Dynamic Uniform Buffer
+                        visibility: wgpu::ShaderStages::VERTEX,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: true, // <--- Crucial!
+                            min_binding_size: wgpu::BufferSize::new(4),
+                        },
+                        count: None,
+                    },
+                ],
+            });
+
         let projection = Projection::new(
             context.config.width,
             context.config.height,
@@ -486,6 +514,7 @@ impl Renderer {
 
             texture_bind_group_layout,
             environment_layout,
+            hierarchy_layout,
 
             instance_buffers: HashMap::new(),
 

@@ -57,7 +57,7 @@ impl Visualizer {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Visualizer Pipeline Layout"),
             bind_group_layouts: &[
-                Some(&gbuffer.layout), 
+                Some(&gbuffer.layout),
                 Some(&settings_bind_group_layout),
                 Some(&renderer.blur_target.bind_group_layout),
             ],
@@ -66,7 +66,7 @@ impl Visualizer {
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Visualizer Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/gbuffer_debug.wgsl").into()),
+            source: wgpu::ShaderSource::Wgsl(include_str!("../shaders/visualizer.wgsl").into()),
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

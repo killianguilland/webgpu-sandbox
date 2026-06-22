@@ -10,6 +10,12 @@ struct Camera {
 @group(1) @binding(0)
 var<uniform> camera: Camera;
 
+struct MeshUniforms {
+    node_index: u32,
+}
+@group(4) @binding(0) var<storage, read> node_transforms: array<mat4x4<f32>>;
+@group(4) @binding(1) var<uniform> mesh_uniforms: MeshUniforms;
+
 struct Light {
     position: vec3<f32>,
     color: vec3<f32>,
@@ -50,27 +56,28 @@ fn vs_main(
     model: VertexInput,
     instance: InstanceInput,
 ) -> VertexOutput {
-    let model_matrix = mat4x4<f32>(
+    let instance_matrix = mat4x4<f32>(
         instance.model_matrix_0,
         instance.model_matrix_1,
         instance.model_matrix_2,
         instance.model_matrix_3,
     );
-    let normal_matrix = mat3x3<f32>(
-        instance.normal_matrix_0,
-        instance.normal_matrix_1,
-        instance.normal_matrix_2,
-    );
+    let node_matrix = node_transforms[mesh_uniforms.node_index];
 
-    // UPDATED!
-    let world_position = model_matrix * vec4<f32>(model.position, 1.0);
+    let final_model_matrix = instance_matrix * node_matrix;
+    let final_normal_matrix = mat3x3<f32>(
+        final_model_matrix[0].xyz,
+        final_model_matrix[1].xyz,
+        final_model_matrix[2].xyz,
+    );
+    let world_position = final_model_matrix * vec4<f32>(model.position, 1.0);
 
     var out: VertexOutput;
     out.clip_position = camera.view_proj * world_position;
     out.tex_coords = model.tex_coords;
-    out.world_normal = normalize(normal_matrix * model.normal);
-    out.world_tangent = normalize(normal_matrix * model.tangent);
-    out.world_bitangent = normalize(normal_matrix * model.bitangent);
+    out.world_normal = normalize(final_normal_matrix * model.normal);
+    out.world_tangent = normalize(final_normal_matrix * model.tangent);   
+    out.world_bitangent = normalize(final_normal_matrix * model.bitangent);
     out.world_position = world_position.xyz;
     out.world_view_position = camera.view_pos.xyz;
     return out;
@@ -133,6 +140,10 @@ var env_map: texture_cube<f32>;
 @group(3)
 @binding(1)
 var env_sampler: sampler;
+
+// Group 5: SSAO
+@group(5) @binding(0) var t_ssao: texture_2d<f32>;
+@group(5) @binding(1) var s_ssao: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
@@ -226,8 +237,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     // Combine the diffuse ambient (darkened heavily) and the shiny skybox reflection!
     // let ambient = (kD_ibl * albedo.rgb * 0.03) + (reflection * kS_ibl);
-    let diffuse_ambient = kD_ibl * albedo.rgb * 0.03;
-    let specular_ambient = reflection * kS_ibl;
+    
+    // Sample the exact pixel from the screen-space SSAO texture
+    let ssao_factor = textureLoad(t_ssao, vec2<i32>(in.clip_position.xy), 0).r;
+
+    let diffuse_ambient = kD_ibl * albedo.rgb * 0.03 * ssao_factor;
+    let specular_ambient = reflection * kS_ibl * ssao_factor;
 
     // 10. PRE-MULTIPLY ALPHA!
     let final_diffuse = (diffuse_light + diffuse_ambient) * albedo.a;

@@ -24,6 +24,8 @@ impl TransparentPass {
                         Some(&renderer.camera_bind_group_layout),
                         Some(&renderer.light_bind_group_layout),
                         Some(&renderer.environment_layout),
+                        Some(&renderer.hierarchy_layout),
+                        Some(&renderer.blur_target.bind_group_layout),
                     ],
                     immediate_size: 0,
                 });
@@ -127,6 +129,8 @@ impl RenderPass for TransparentPass {
         if let Some(env_bg) = resources.get_bind_group(&viewer.skybox_path) {
             render_pass.set_bind_group(3, env_bg, &[]);
         }
+
+        render_pass.set_bind_group(5, &renderer.blur_target.bind_group, &[]);
 
         use crate::model::DrawModel;
         for (model_name, (instance_buffer, count)) in &renderer.instance_buffers {
