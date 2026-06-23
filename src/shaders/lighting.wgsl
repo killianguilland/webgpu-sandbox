@@ -49,7 +49,7 @@ fn fresnelSchlick(cosTheta: f32, F0: vec3<f32>) -> vec3<f32> {
 @group(0) @binding(1) var t_normal: texture_2d<f32>;
 @group(0) @binding(2) var t_pbr: texture_2d<f32>;
 @group(0) @binding(3) var t_depth: texture_depth_2d;
-@group(0) @binding(4) var s_sampler: sampler;
+@group(0) @binding(5) var s_sampler: sampler;
 
 // Group 1: Camera
 struct CameraUniform {

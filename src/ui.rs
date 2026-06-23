@@ -321,6 +321,8 @@ impl AppUi {
                     window_ui.radio_value(&mut settings.debug_mode, 3, "Metal/Rough");
                     window_ui.radio_value(&mut settings.debug_mode, 4, "Depth");
                     window_ui.radio_value(&mut settings.debug_mode, 5, "SSAO");
+                    window_ui.radio_value(&mut settings.debug_mode, 6, "Velocity (raw)");
+                    window_ui.radio_value(&mut settings.debug_mode, 7, "Velocity (polar)");
                 });
             });
         }

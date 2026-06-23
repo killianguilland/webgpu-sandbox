@@ -4,8 +4,9 @@ use crate::texture::Texture;
 pub struct GBuffer {
     pub albedo: Texture,
     pub normal: Texture,
-    pub pbr: Texture, // R = Metallic, G = Roughness
+    pub pbr: Texture,
     pub depth: Texture,
+    pub velocity: Texture,
 
     pub layout: wgpu::BindGroupLayout,
     pub bind_group: wgpu::BindGroup,
@@ -16,6 +17,7 @@ impl GBuffer {
     pub const NORMAL_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
     pub const PBR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
     pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
+    pub const VELOCITY_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
 
     pub fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self {
         let albedo =
@@ -25,6 +27,12 @@ impl GBuffer {
         let pbr = Texture::create_render_target(device, config, Self::PBR_FORMAT, "GBuffer PBR");
         let depth =
             Texture::create_render_target(device, config, Self::DEPTH_FORMAT, "GBuffer Depth");
+        let velocity = Texture::create_render_target(
+            device,
+            config,
+            Self::VELOCITY_FORMAT,
+            "GBuffer Velocity",
+        );
 
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("GBuffer Bind Group Layout"),
@@ -72,6 +80,16 @@ impl GBuffer {
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
                     visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
                 },
@@ -100,6 +118,10 @@ impl GBuffer {
                 },
                 wgpu::BindGroupEntry {
                     binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&velocity.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
                     resource: wgpu::BindingResource::Sampler(&albedo.sampler),
                 },
             ],
@@ -110,6 +132,7 @@ impl GBuffer {
             normal,
             pbr,
             depth,
+            velocity,
             layout,
             bind_group,
         }

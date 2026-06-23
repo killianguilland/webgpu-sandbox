@@ -22,6 +22,7 @@ pub struct CameraUniform {
     view_proj: [[f32; 4]; 4],
     inv_proj: [[f32; 4]; 4],
     inv_view: [[f32; 4]; 4],
+    prev_view_proj: [[f32; 4]; 4],
 }
 
 impl CameraUniform {
@@ -33,6 +34,7 @@ impl CameraUniform {
             view_proj: cgmath::Matrix4::identity().into(),
             inv_proj: cgmath::Matrix4::identity().into(),
             inv_view: cgmath::Matrix4::identity().into(),
+            prev_view_proj: cgmath::Matrix4::identity().into(),
         }
     }
 
@@ -43,6 +45,7 @@ impl CameraUniform {
         let view = camera.calc_matrix();
         let view_proj = proj * view;
         self.view = view.into();
+        self.prev_view_proj = self.view_proj.into();
         self.view_proj = view_proj.into();
         self.inv_proj = proj.invert().unwrap().into();
         self.inv_view = view.invert().unwrap().into();
@@ -211,6 +214,7 @@ pub trait RenderPass {
 // --------------------------------------------------------------------------
 
 pub struct Renderer {
+    pub camera_uniform: CameraUniform,
     pub camera_buffer: wgpu::Buffer,
     pub camera_bind_group_layout: wgpu::BindGroupLayout,
     pub camera_bind_group: wgpu::BindGroup,
@@ -532,6 +536,7 @@ impl Renderer {
         );
 
         Self {
+            camera_uniform,
             camera_buffer,
             camera_bind_group_layout,
             camera_bind_group,
@@ -582,12 +587,12 @@ impl Renderer {
             100.0,
         );
 
-        let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&viewer.camera, &self.projection);
+        self.camera_uniform
+            .update_view_proj(&viewer.camera, &self.projection);
         context.queue.write_buffer(
             &self.camera_buffer,
             0,
-            bytemuck::cast_slice(&[camera_uniform]),
+            bytemuck::cast_slice(&[self.camera_uniform]),
         );
 
         let settings_uniform = SettingsUniform {

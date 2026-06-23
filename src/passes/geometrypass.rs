@@ -72,6 +72,11 @@ impl GeometryPass {
                                 write_mask: wgpu::ColorWrites::ALL,
                             }),
                             Some(wgpu::ColorTargetState {
+                                format: crate::gbuffer::GBuffer::VELOCITY_FORMAT,
+                                blend: None,
+                                write_mask: wgpu::ColorWrites::ALL,
+                            }),
+                            Some(wgpu::ColorTargetState {
                                 format: hdr_format,
                                 blend: Some(wgpu::BlendState {
                                     color: wgpu::BlendComponent {
@@ -150,6 +155,15 @@ impl RenderPass for GeometryPass {
                     depth_slice: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
+                        store: wgpu::StoreOp::Store,
+                    },
+                }),
+                Some(wgpu::RenderPassColorAttachment {
+                    view: &gbuffer.velocity.view,
+                    resolve_target: None,
+                    depth_slice: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                         store: wgpu::StoreOp::Store,
                     },
                 }),

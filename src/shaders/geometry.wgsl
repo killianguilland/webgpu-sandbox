@@ -6,6 +6,7 @@ struct Camera {
     view_proj: mat4x4<f32>,
     inv_proj: mat4x4<f32>,
     inv_view: mat4x4<f32>,
+    prev_view_proj: mat4x4<f32>,
 }
 struct MeshUniforms {
     node_index: u32,
@@ -47,6 +48,8 @@ struct VertexOutput {
     @location(4) world_normal: vec3<f32>,
     @location(5) world_tangent: vec3<f32>,
     @location(6) world_bitangent: vec3<f32>,
+    @location(7) current_clip_pos: vec4<f32>,
+    @location(8) prev_clip_pos: vec4<f32>,
 }
 
 
@@ -79,6 +82,11 @@ fn vs_main(
     out.world_bitangent = normalize(final_normal_matrix * model.bitangent);
     out.world_position = world_position.xyz;
     out.world_view_position = camera.view_pos.xyz;
+    
+    // VELOCITY CALCULATION
+    out.current_clip_pos = out.clip_position;
+    out.prev_clip_pos = camera.prev_view_proj * world_position;
+
     return out;
 }
 
@@ -115,7 +123,8 @@ struct GBufferOutput {
     @location(0) albedo: vec4<f32>,
     @location(1) normal: vec4<f32>,
     @location(2) pbr: vec4<f32>,
-    @location(3) emissive: vec4<f32>,
+    @location(3) velocity: vec2<f32>,
+    @location(4) emissive: vec4<f32>,
 };
 
 @fragment
@@ -170,5 +179,16 @@ fn fs_main(in: VertexOutput) -> GBufferOutput {
 
     let emissive = textureSample(t_emissive, s_emissive, in.tex_coords).rgb * material.emissive_occlusion.xyz;
 
-    return GBufferOutput(albedo, normal_out, pbr, vec4<f32>(emissive, 1.0));
+    // VELOCITY CALCULATION
+    // Convert to Normalized Device Coordinates (NDC)
+    let current_ndc = in.current_clip_pos.xy / in.current_clip_pos.w;
+    let prev_ndc = in.prev_clip_pos.xy / in.prev_clip_pos.w;
+    
+    // NDC is [-1, 1]. Convert to UV space [0, 1]
+    let current_uv = current_ndc * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+    let prev_uv = prev_ndc * vec2<f32>(0.5, -0.5) + vec2<f32>(0.5, 0.5);
+    
+    let velocity = current_uv - prev_uv;
+
+    return GBufferOutput(albedo, normal_out, pbr, velocity, vec4<f32>(emissive, 1.0));
 }

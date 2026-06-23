@@ -24,7 +24,8 @@ fn vs_main(
 @group(0) @binding(1) var t_normal: texture_2d<f32>;
 @group(0) @binding(2) var t_pbr: texture_2d<f32>;
 @group(0) @binding(3) var t_depth: texture_depth_2d;
-@group(0) @binding(4) var s_sampler: sampler;
+@group(0) @binding(4) var t_velocity: texture_2d<f32>;
+@group(0) @binding(5) var s_sampler: sampler;
 // We will use a uniform buffer to tell the shader which texture to draw
 struct DebugSettings {
     mode: u32,
@@ -50,9 +51,36 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // Depth
         let depth_val = textureLoad(t_depth, vec2<i32>(in.clip_position.xy), 0);
         return vec4<f32>(depth_val, depth_val, depth_val, 1.0);
-    } else {
+    } else if (settings.mode == 4u) {
         // SSAO
         let ssao = textureSample(t_ssao, s_ssao, in.uv).r;
         return vec4<f32>(ssao, ssao, ssao, 1.0);
+    } else if (settings.mode == 5u) {
+        // Velocity
+        let velocity = textureSample(t_velocity, s_sampler, in.uv).rg;
+        return vec4<f32>(velocity, 0.0, 1.0);
+    } else {
+        // Sample the 2D velocity vector
+        let velocity = textureSample(t_velocity, s_sampler, in.uv).rg;
+        
+        // 1. Magnitude (Speed) = Brightness
+        let speed = length(velocity);
+        
+        // 2. Angle (Direction) = Hue
+        // atan2 returns an angle between -PI and PI
+        let angle = atan2(velocity.y, velocity.x); 
+        
+        // Map the angle from [-PI, PI] to [0.0, 1.0]
+        let hue = (angle / 3.14159265) * 0.5 + 0.5;
+        
+        // 3. Convert Hue to an RGB color
+        let r = abs(hue * 6.0 - 3.0) - 1.0;
+        let g = 2.0 - abs(hue * 6.0 - 2.0);
+        let b = 2.0 - abs(hue * 6.0 - 4.0);
+        let rgb = clamp(vec3<f32>(r, g, b), vec3<f32>(0.0), vec3<f32>(1.0));
+        
+        // Multiply color by speed. We multiply speed by a big number 
+        // because pixel velocity from frame-to-frame is usually tiny!
+        return vec4<f32>(rgb * (speed * 100.0), 1.0);
     }
 }

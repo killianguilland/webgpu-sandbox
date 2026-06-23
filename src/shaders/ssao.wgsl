@@ -24,7 +24,7 @@ fn vs_main(
 // Group 0: GBuffer (We only need Normal and Depth for SSAO)
 @group(0) @binding(1) var t_normal: texture_2d<f32>;
 @group(0) @binding(3) var t_depth: texture_depth_2d;
-@group(0) @binding(4) var s_gbuffer: sampler;
+@group(0) @binding(5) var s_gbuffer: sampler;
 
 // Group 1: Camera Uniform
 struct CameraUniform {
