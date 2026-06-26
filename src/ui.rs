@@ -200,6 +200,13 @@ impl AppUi {
                     viewer.camera.position.y.round(),
                     viewer.camera.position.z.round(),
                 ));
+                hz_ui.separator();
+                hz_ui.label(format!(
+                    "G-buffer dimensions {}x{}",
+                    settings.width, settings.height
+                ));
+                hz_ui.separator();
+                hz_ui.label(format!("{} model(s) loaded", models.iter().count()));
             });
         });
         if self.is_view_panel_open {

@@ -138,16 +138,19 @@ impl EngineState {
     pub fn resize(&mut self, width: u32, height: u32) {
         self.context.resize(width, height);
 
-        let scaled_width = (width as f32 * self.settings.resolution_scale).max(1.0) as u32;
-        let scaled_height = (height as f32 * self.settings.resolution_scale).max(1.0) as u32;
+        self.settings.width = (width as f32 * self.settings.resolution_scale).max(1.0) as u32;
+        self.settings.height = (height as f32 * self.settings.resolution_scale).max(1.0) as u32;
 
         let mut scaled_config = self.context.config.clone();
-        scaled_config.width = scaled_width;
-        scaled_config.height = scaled_height;
+        scaled_config.width = self.settings.width;
+        scaled_config.height = self.settings.height;
 
         self.renderer.resize(&self.context.device, &scaled_config);
-        self.hdr_visualizer
-            .resize(&self.context.device, scaled_width, scaled_height);
+        self.hdr_visualizer.resize(
+            &self.context.device,
+            self.settings.width,
+            self.settings.height,
+        );
         self.gbuffer.resize(&self.context.device, &scaled_config);
     }
 
@@ -293,7 +296,8 @@ impl ApplicationHandler<EngineState> for App {
 
         let window_attributes = Window::default_attributes()
             .with_transparent(true)
-            .with_blur(true);
+            .with_blur(true)
+            .with_title("Model viewer");
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
 
         self.state = Some(pollster::block_on(EngineState::new(window)).unwrap());

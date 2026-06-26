@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
 pub struct RenderSettings {
+    pub width: u32,
+    pub height: u32,
+
     // Maps a pass name to its enabled/disabled state
     pub pass_states: HashMap<String, bool>,
     pub debug_mode: u32,
@@ -30,6 +33,9 @@ pub struct RenderSettings {
 impl RenderSettings {
     pub fn new() -> Self {
         Self {
+            width: 0,
+            height: 0,
+
             pass_states: HashMap::new(),
             debug_mode: 0,
 
