@@ -213,7 +213,7 @@ impl EngineState {
 
         self.renderer.render(
             &self.context,
-            &self.hdr_visualizer.view(),
+            &self.hdr_visualizer.current_view(),
             &self.gbuffer,
             &self.viewer,
             &self.resources,
@@ -268,6 +268,7 @@ impl EngineState {
         }
 
         self.context.queue.submit(std::iter::once(encoder.finish()));
+        self.hdr_visualizer.advance_frame();
         output.present();
 
         Ok(())
