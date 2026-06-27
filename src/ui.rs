@@ -2,6 +2,11 @@ use crate::graphics::model::Model;
 use crate::{context::GraphicsContext, graphics::viewer::ModelViewer};
 use std::collections::HashMap;
 
+/*
+ * The UI struct is the presentation layer.
+ * Manages the Egui integration and state. Responsible for building and drawing
+ * the debug overlay and user interface on top of the final 3D scene.
+ */
 pub struct UiState {
     pub ctx: egui::Context,
     pub winit_state: egui_winit::State,

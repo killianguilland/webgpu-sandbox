@@ -11,8 +11,10 @@ use std::sync::Arc;
 use winit::window::Window;
 
 /*
- * The core struct holds all of the state of the application.
- * It is responsible of handling the ui, the 3D renderer
+ * The Core struct is the logic layer.
+ * Holds the entire state of the engine (Context, Renderer, Resources, UI).
+ * Responsible for orchestrating the frame loop: processing input, updating the
+ * camera and scene, and dispatching render commands to the Graphics Layer.
  */
 pub struct Core {
     pub context: GraphicsContext,

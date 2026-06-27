@@ -2,6 +2,12 @@ use std::collections::HashSet;
 use winit::event::{ElementState, KeyEvent, MouseButton, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
+/*
+ * This is the input state manager.
+ * Tracks the current status of keyboard keys and mouse movement, smoothing out
+ * raw Winit events. Allows other systems (like the Camera) to easily poll for
+ * input state without dealing with OS-level event handling.
+ */
 #[derive(Default)]
 pub struct Input {
     pub keys: HashSet<KeyCode>,

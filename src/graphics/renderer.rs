@@ -214,6 +214,12 @@ pub trait RenderPass {
 // Renderer Core
 // --------------------------------------------------------------------------
 
+/*
+ * The Renderer struct holds the global rendering state.
+ * Manages all global bind group layouts, uniform buffers, and render targets.
+ * Its primary job is to hold a collection of Render Passes and execute them
+ * sequentially every frame to turn the 3D scene data into final pixels.
+ */
 pub struct Renderer {
     pub camera_uniform: CameraUniform,
     pub camera_buffer: wgpu::Buffer,

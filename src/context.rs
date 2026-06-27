@@ -1,6 +1,12 @@
 use std::sync::Arc;
 use winit::window::Window;
 
+/*
+ * The graphics context wraps the core WebGPU handles
+ * (Instance, Surface, Device, Queue, and Configuration).
+ * This struct represents your direct connection to the physical graphics card and
+ * is required by almost every other system to allocate GPU memory.
+ */
 pub struct GraphicsContext {
     pub surface: wgpu::Surface<'static>,
     pub device: wgpu::Device,

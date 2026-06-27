@@ -10,6 +10,12 @@ use winit::{
 
 use crate::core::Core;
 
+/*
+ * The App struct acts as the platform layer.
+ * Responsible for initializing the OS window, handling the Winit event loop,
+ * catching raw OS events, and managing the application lifecycle (suspend/resume/close).
+ * It acts as the bridge between the Operating System and the Core engine.
+ */
 pub struct App {
     state: Option<Core>,
     last_render_time: Instant,

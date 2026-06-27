@@ -1,5 +1,11 @@
 use std::collections::HashMap;
 
+/*
+ * This structs holds the current configuration state.
+ * Holds all mutable render settings, debugging toggles, and pass execution flags.
+ * This data is often bound to UI sliders and is read by the Renderer to adjust
+ * the graphical output at runtime.
+ */
 pub struct RenderSettings {
     pub width: u32,
     pub height: u32,
