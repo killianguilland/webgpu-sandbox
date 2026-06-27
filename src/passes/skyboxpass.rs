@@ -1,5 +1,5 @@
 use crate::context::GraphicsContext;
-use crate::graphics::renderer::{RenderPass, Renderer, create_render_pipeline};
+use crate::graphics::renderer::{Renderer, create_render_pipeline};
 use crate::graphics::texture;
 use crate::graphics::viewer::ModelViewer;
 
@@ -39,7 +39,7 @@ impl SkyboxPass {
     }
 }
 
-impl RenderPass for SkyboxPass {
+impl crate::passes::RenderPass for SkyboxPass {
     fn name(&self) -> &str {
         "Skybox"
     }

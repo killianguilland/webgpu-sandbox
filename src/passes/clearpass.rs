@@ -1,10 +1,10 @@
 use crate::context::GraphicsContext;
+use crate::graphics::renderer::Renderer;
 use crate::graphics::viewer::ModelViewer;
-use crate::graphics::renderer::{RenderPass, Renderer};
 
 pub struct ClearPass;
 
-impl RenderPass for ClearPass {
+impl crate::passes::RenderPass for ClearPass {
     fn name(&self) -> &str {
         "Clear"
     }

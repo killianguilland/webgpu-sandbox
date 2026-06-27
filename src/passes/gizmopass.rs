@@ -53,7 +53,10 @@ impl GizmoPass {
             &layout,
             hdr_format,
             Some(texture::Texture::DEPTH_FORMAT),
-            &[GizmoVertex::desc(), crate::graphics::renderer::InstanceRaw::desc()],
+            &[
+                GizmoVertex::desc(),
+                crate::graphics::renderer::InstanceRaw::desc(),
+            ],
             wgpu::PrimitiveTopology::LineList,
             shader,
         );
@@ -117,7 +120,7 @@ impl GizmoPass {
     }
 }
 
-impl crate::graphics::renderer::RenderPass for GizmoPass {
+impl crate::passes::RenderPass for GizmoPass {
     fn name(&self) -> &str {
         "Gizmo"
     }

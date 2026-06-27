@@ -1,7 +1,7 @@
 use crate::context::GraphicsContext;
 use crate::graphics::model;
 use crate::graphics::model::Vertex;
-use crate::graphics::renderer::{RenderPass, Renderer};
+use crate::graphics::renderer::Renderer;
 use crate::graphics::viewer::ModelViewer;
 
 pub struct GeometryPass {
@@ -105,7 +105,7 @@ impl GeometryPass {
     }
 }
 
-impl RenderPass for GeometryPass {
+impl crate::passes::RenderPass for GeometryPass {
     fn name(&self) -> &str {
         "Geometry"
     }

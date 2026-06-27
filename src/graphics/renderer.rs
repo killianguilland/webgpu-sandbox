@@ -4,6 +4,7 @@ use crate::context::GraphicsContext;
 use crate::graphics;
 use crate::graphics::camera::{Camera, Projection};
 use crate::graphics::viewer::{Instance, ModelViewer};
+use crate::passes::RenderPass;
 use std::collections::HashMap;
 
 #[repr(C)]
@@ -190,29 +191,6 @@ pub fn create_render_pipeline(
         cache: None,
     })
 }
-
-// --------------------------------------------------------------------------
-// Traits
-// --------------------------------------------------------------------------
-
-pub trait RenderPass {
-    fn name(&self) -> &str;
-    fn render(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        gbuffer: &graphics::gbuffer::GBuffer,
-        viewer: &ModelViewer,
-        resources: &graphics::resources::ResourceManager,
-        context: &GraphicsContext,
-        renderer: &Renderer,
-        settings: &crate::settings::RenderSettings,
-    );
-}
-
-// --------------------------------------------------------------------------
-// Renderer Core
-// --------------------------------------------------------------------------
 
 /*
  * The Renderer struct holds the global rendering state.

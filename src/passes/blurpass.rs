@@ -55,7 +55,7 @@ impl BlurPass {
     }
 }
 
-impl crate::graphics::renderer::RenderPass for BlurPass {
+impl crate::passes::RenderPass for BlurPass {
     fn name(&self) -> &str {
         "Blur"
     }

@@ -80,7 +80,7 @@ impl LightingPass {
     }
 }
 
-impl crate::graphics::renderer::RenderPass for LightingPass {
+impl crate::passes::RenderPass for LightingPass {
     fn name(&self) -> &str {
         "Lighting"
     }

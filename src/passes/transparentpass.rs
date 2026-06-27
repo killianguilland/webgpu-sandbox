@@ -1,7 +1,7 @@
 use crate::context::GraphicsContext;
 use crate::graphics::model;
 use crate::graphics::model::Vertex;
-use crate::graphics::renderer::{RenderPass, Renderer};
+use crate::graphics::renderer::Renderer;
 use crate::graphics::viewer::ModelViewer;
 
 pub struct TransparentPass {
@@ -86,7 +86,7 @@ impl TransparentPass {
     }
 }
 
-impl RenderPass for TransparentPass {
+impl crate::passes::RenderPass for TransparentPass {
     fn name(&self) -> &str {
         "Transparent"
     }

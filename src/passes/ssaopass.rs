@@ -1,6 +1,6 @@
 use crate::context::GraphicsContext;
 use crate::graphics::gbuffer::GBuffer;
-use crate::graphics::renderer::{RenderPass, Renderer};
+use crate::graphics::renderer::Renderer;
 use crate::graphics::resources::ResourceManager;
 use crate::graphics::texture::Texture;
 use crate::graphics::viewer::ModelViewer;
@@ -207,7 +207,7 @@ impl SsaoPass {
     }
 }
 
-impl RenderPass for SsaoPass {
+impl crate::passes::RenderPass for SsaoPass {
     fn name(&self) -> &str {
         "SSAO"
     }
