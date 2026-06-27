@@ -1,5 +1,5 @@
 use crate::context::GraphicsContext;
-use crate::renderer::Renderer;
+use crate::graphics::renderer::Renderer;
 
 pub struct BlurPass {
     pipeline: wgpu::RenderPipeline,
@@ -55,7 +55,7 @@ impl BlurPass {
     }
 }
 
-impl crate::renderer::RenderPass for BlurPass {
+impl crate::graphics::renderer::RenderPass for BlurPass {
     fn name(&self) -> &str {
         "Blur"
     }

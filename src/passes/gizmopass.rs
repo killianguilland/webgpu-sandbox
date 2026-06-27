@@ -1,5 +1,5 @@
 use crate::context::GraphicsContext;
-use crate::renderer::{Renderer, create_render_pipeline};
+use crate::graphics::renderer::{Renderer, create_render_pipeline};
 use crate::graphics::texture;
 use crate::graphics::viewer::ModelViewer;
 
@@ -53,7 +53,7 @@ impl GizmoPass {
             &layout,
             hdr_format,
             Some(texture::Texture::DEPTH_FORMAT),
-            &[GizmoVertex::desc(), crate::renderer::InstanceRaw::desc()],
+            &[GizmoVertex::desc(), crate::graphics::renderer::InstanceRaw::desc()],
             wgpu::PrimitiveTopology::LineList,
             shader,
         );
@@ -117,7 +117,7 @@ impl GizmoPass {
     }
 }
 
-impl crate::renderer::RenderPass for GizmoPass {
+impl crate::graphics::renderer::RenderPass for GizmoPass {
     fn name(&self) -> &str {
         "Gizmo"
     }
@@ -167,7 +167,7 @@ impl crate::renderer::RenderPass for GizmoPass {
         let mut gizmo_instances = Vec::new();
         for node in gizmo_nodes {
             let transform = node.get_transform();
-            gizmo_instances.push(crate::renderer::InstanceRaw {
+            gizmo_instances.push(crate::graphics::renderer::InstanceRaw {
                 model: transform.into(),
                 // Normal matrix isn't used by our gizmo shader, so we just provide identity
                 normal: cgmath::Matrix3::from_scale(1.0).into(),

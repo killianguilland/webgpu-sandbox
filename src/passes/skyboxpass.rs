@@ -1,5 +1,5 @@
 use crate::context::GraphicsContext;
-use crate::renderer::{RenderPass, Renderer, create_render_pipeline};
+use crate::graphics::renderer::{RenderPass, Renderer, create_render_pipeline};
 use crate::graphics::texture;
 use crate::graphics::viewer::ModelViewer;
 

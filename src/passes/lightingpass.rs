@@ -1,6 +1,6 @@
 use crate::context::GraphicsContext;
 use crate::graphics::gbuffer::GBuffer;
-use crate::renderer::Renderer;
+use crate::graphics::renderer::Renderer;
 
 pub struct LightingPass {
     pipeline: wgpu::RenderPipeline,
@@ -80,7 +80,7 @@ impl LightingPass {
     }
 }
 
-impl crate::renderer::RenderPass for LightingPass {
+impl crate::graphics::renderer::RenderPass for LightingPass {
     fn name(&self) -> &str {
         "Lighting"
     }
@@ -93,7 +93,7 @@ impl crate::renderer::RenderPass for LightingPass {
         viewer: &crate::graphics::viewer::ModelViewer,
         resources: &crate::graphics::resources::ResourceManager,
         _context: &GraphicsContext,
-        renderer: &crate::renderer::Renderer,
+        renderer: &crate::graphics::renderer::Renderer,
         _settings: &crate::settings::RenderSettings,
     ) {
         // Update the uniform

@@ -1,7 +1,7 @@
 use crate::context::GraphicsContext;
 use crate::graphics::model;
 use crate::graphics::model::Vertex;
-use crate::renderer::{RenderPass, Renderer};
+use crate::graphics::renderer::{RenderPass, Renderer};
 use crate::graphics::viewer::ModelViewer;
 
 pub struct GeometryPass {
@@ -48,7 +48,7 @@ impl GeometryPass {
                         entry_point: Some("vs_main"),
                         buffers: &[
                             model::ModelVertex::desc(),
-                            crate::renderer::InstanceRaw::desc(),
+                            crate::graphics::renderer::InstanceRaw::desc(),
                         ],
                         compilation_options: Default::default(),
                     },

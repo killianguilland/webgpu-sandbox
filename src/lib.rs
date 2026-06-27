@@ -5,7 +5,6 @@ pub mod graphics;
 pub mod input;
 pub mod passes;
 pub mod postprocess;
-pub mod renderer;
 pub mod settings;
 mod ui;
 

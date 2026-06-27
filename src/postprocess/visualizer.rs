@@ -19,7 +19,7 @@ impl Visualizer {
         device: &wgpu::Device,
         format: wgpu::TextureFormat,
         gbuffer: &GBuffer,
-        renderer: &crate::renderer::Renderer,
+        renderer: &crate::graphics::renderer::Renderer,
     ) -> Self {
         let settings_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Visualizer Settings Buffer"),
@@ -112,7 +112,7 @@ impl Visualizer {
         output: &wgpu::TextureView,
         gbuffer: &GBuffer,
         queue: &wgpu::Queue,
-        renderer: &crate::renderer::Renderer,
+        renderer: &crate::graphics::renderer::Renderer,
         mode: u32,
     ) {
         // Update the uniform

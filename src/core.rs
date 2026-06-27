@@ -1,9 +1,9 @@
+use crate::graphics::renderer::Renderer;
 use crate::graphics::resources;
 use crate::graphics::viewer::ModelViewer;
 use crate::passes::{BlurPass, ClearPass, GeometryPass, GizmoPass, SkyboxPass, SsaoPass};
 use crate::postprocess::hdr::Hdr;
 use crate::postprocess::visualizer::Visualizer;
-use crate::renderer::Renderer;
 use crate::{context::GraphicsContext, graphics::gbuffer::GBuffer};
 use crate::{graphics::gbuffer, passes::lightingpass::LightingPass};
 use crate::{input::Input, passes::TransparentPass};

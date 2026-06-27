@@ -1,6 +1,6 @@
 use crate::context::GraphicsContext;
 use crate::graphics::viewer::ModelViewer;
-use crate::renderer::{RenderPass, Renderer};
+use crate::graphics::renderer::{RenderPass, Renderer};
 
 pub struct ClearPass;
 

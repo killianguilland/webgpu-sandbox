@@ -1,8 +1,8 @@
 use crate::context::GraphicsContext;
 use crate::graphics::model;
 use crate::graphics::model::Vertex;
+use crate::graphics::renderer::{RenderPass, Renderer};
 use crate::graphics::viewer::ModelViewer;
-use crate::renderer::{RenderPass, Renderer};
 
 pub struct TransparentPass {
     pub render_pipeline: wgpu::RenderPipeline,
@@ -51,7 +51,7 @@ impl TransparentPass {
                         entry_point: Some("vs_main"),
                         buffers: &[
                             model::ModelVertex::desc(),
-                            crate::renderer::InstanceRaw::desc(),
+                            crate::graphics::renderer::InstanceRaw::desc(),
                         ],
                         compilation_options: Default::default(),
                     },

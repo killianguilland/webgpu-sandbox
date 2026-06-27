@@ -1,6 +1,6 @@
 use wgpu::Operations;
 
-use crate::renderer::create_render_pipeline;
+use crate::graphics::renderer::create_render_pipeline;
 use crate::graphics::texture;
 
 /// Owns the render texture and controls tonemapping
