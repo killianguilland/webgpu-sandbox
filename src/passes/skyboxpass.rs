@@ -1,7 +1,7 @@
 use crate::context::GraphicsContext;
 use crate::renderer::{RenderPass, Renderer, create_render_pipeline};
-use crate::texture;
-use crate::viewer::ModelViewer;
+use crate::graphics::texture;
+use crate::graphics::viewer::ModelViewer;
 
 pub struct SkyboxPass {
     pub render_pipeline: wgpu::RenderPipeline,
@@ -47,9 +47,9 @@ impl RenderPass for SkyboxPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        gbuffer: &crate::gbuffer::GBuffer,
+        gbuffer: &crate::graphics::gbuffer::GBuffer,
         viewer: &ModelViewer,
-        resources: &crate::resources::ResourceManager,
+        resources: &crate::graphics::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
         _settings: &crate::settings::RenderSettings,

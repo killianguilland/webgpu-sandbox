@@ -1,5 +1,5 @@
 // In src/gbuffer.rs
-use crate::texture::Texture;
+use crate::graphics::texture::Texture;
 
 pub struct GBuffer {
     pub albedo: Texture,

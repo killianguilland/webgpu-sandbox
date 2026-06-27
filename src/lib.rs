@@ -1,16 +1,12 @@
 pub mod app;
-mod camera;
 pub mod context;
-mod gbuffer;
+pub mod core;
+pub mod graphics;
 pub mod input;
-mod model;
 pub mod passes;
 pub mod postprocess;
 pub mod renderer;
-mod resources;
-pub mod viewer;
 pub mod settings;
-mod texture;
 mod ui;
 
 use crate::app::App;

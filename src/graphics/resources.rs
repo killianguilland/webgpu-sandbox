@@ -4,7 +4,7 @@ use wgpu::util::DeviceExt;
 
 use image::codecs::hdr::HdrDecoder;
 
-use crate::{model, texture};
+use crate::graphics::{model, texture};
 use asset_importer::{Importer, TextureType, postprocess::PostProcessSteps};
 
 use std::collections::HashMap;
@@ -85,7 +85,7 @@ pub struct ResourceManager {
 impl ResourceManager {
     pub fn new(device: &wgpu::Device) -> Self {
         let module =
-            device.create_shader_module(wgpu::include_wgsl!("shaders/equirectangular.wgsl"));
+            device.create_shader_module(wgpu::include_wgsl!("../shaders/equirectangular.wgsl"));
         let texture_format = wgpu::TextureFormat::Rgba32Float;
         let equirect_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("ResourceManager::equirect_layout"),

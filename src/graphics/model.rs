@@ -1,6 +1,6 @@
 use std::ops::Range;
 
-use crate::texture;
+use crate::graphics::texture;
 use wgpu::util::DeviceExt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

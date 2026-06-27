@@ -1,8 +1,9 @@
 use wgpu::util::DeviceExt;
 
-use crate::camera::{Camera, Projection};
 use crate::context::GraphicsContext;
-use crate::viewer::{Instance, ModelViewer};
+use crate::graphics;
+use crate::graphics::camera::{Camera, Projection};
+use crate::graphics::viewer::{Instance, ModelViewer};
 use std::collections::HashMap;
 
 #[repr(C)]
@@ -200,9 +201,9 @@ pub trait RenderPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        gbuffer: &crate::gbuffer::GBuffer,
+        gbuffer: &graphics::gbuffer::GBuffer,
         viewer: &ModelViewer,
-        resources: &crate::resources::ResourceManager,
+        resources: &graphics::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
         settings: &crate::settings::RenderSettings,
@@ -228,6 +229,7 @@ pub struct Renderer {
     pub settings_bind_group: wgpu::BindGroup,
 
     pub texture_bind_group_layout: wgpu::BindGroupLayout,
+    pub single_texture_bind_group_layout: wgpu::BindGroupLayout,
     pub environment_layout: wgpu::BindGroupLayout,
 
     pub instance_buffers: HashMap<String, (wgpu::Buffer, u32)>,
@@ -235,8 +237,8 @@ pub struct Renderer {
     pub projection: Projection,
 
     passes: Vec<Box<dyn RenderPass>>,
-    pub ssao_target: crate::texture::RenderTarget,
-    pub blur_target: crate::texture::RenderTarget,
+    pub ssao_target: graphics::texture::RenderTarget,
+    pub blur_target: graphics::texture::RenderTarget,
     pub hierarchy_layout: wgpu::BindGroupLayout,
 }
 
@@ -488,6 +490,29 @@ impl Renderer {
                 ],
             });
 
+        let single_texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("single_texture_bind_group_layout"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
+
         let hierarchy_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Hierarchy Bind Group Layout"),
             entries: &[
@@ -522,13 +547,13 @@ impl Renderer {
             100.0,
         );
 
-        let ssao_target = crate::texture::RenderTarget::new(
+        let ssao_target = graphics::texture::RenderTarget::new(
             &context.device,
             &context.config,
             wgpu::TextureFormat::R8Unorm,
             "SSAO Target",
         );
-        let blur_target = crate::texture::RenderTarget::new(
+        let blur_target = graphics::texture::RenderTarget::new(
             &context.device,
             &context.config,
             wgpu::TextureFormat::R8Unorm,
@@ -550,6 +575,7 @@ impl Renderer {
             settings_bind_group,
 
             texture_bind_group_layout,
+            single_texture_bind_group_layout,
             environment_layout,
             hierarchy_layout,
 
@@ -656,9 +682,9 @@ impl Renderer {
         &self,
         context: &GraphicsContext,
         view: &wgpu::TextureView,
-        gbuffer: &crate::gbuffer::GBuffer,
+        gbuffer: &graphics::gbuffer::GBuffer,
         viewer: &ModelViewer,
-        resources: &crate::resources::ResourceManager,
+        resources: &graphics::resources::ResourceManager,
         encoder: &mut wgpu::CommandEncoder,
         settings: &crate::settings::RenderSettings,
     ) {

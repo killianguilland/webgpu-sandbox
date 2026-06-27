@@ -1,5 +1,5 @@
-use crate::model::Model;
-use crate::{context::GraphicsContext, viewer::ModelViewer};
+use crate::graphics::model::Model;
+use crate::{context::GraphicsContext, graphics::viewer::ModelViewer};
 use std::collections::HashMap;
 
 pub struct UiState {

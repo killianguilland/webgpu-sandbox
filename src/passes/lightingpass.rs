@@ -1,5 +1,5 @@
 use crate::context::GraphicsContext;
-use crate::gbuffer::GBuffer;
+use crate::graphics::gbuffer::GBuffer;
 use crate::renderer::Renderer;
 
 pub struct LightingPass {
@@ -89,9 +89,9 @@ impl crate::renderer::RenderPass for LightingPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        gbuffer: &crate::gbuffer::GBuffer,
-        viewer: &crate::viewer::ModelViewer,
-        resources: &crate::resources::ResourceManager,
+        gbuffer: &crate::graphics::gbuffer::GBuffer,
+        viewer: &crate::graphics::viewer::ModelViewer,
+        resources: &crate::graphics::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &crate::renderer::Renderer,
         _settings: &crate::settings::RenderSettings,

@@ -1,4 +1,4 @@
-use crate::camera::{Camera, CameraController};
+use crate::graphics::camera::{Camera, CameraController};
 use crate::input::Input;
 use cgmath::{Quaternion, Rotation3, Vector3, Zero};
 use std::time::Duration;

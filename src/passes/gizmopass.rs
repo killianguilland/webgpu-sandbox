@@ -1,7 +1,7 @@
 use crate::context::GraphicsContext;
 use crate::renderer::{Renderer, create_render_pipeline};
-use crate::texture;
-use crate::viewer::ModelViewer;
+use crate::graphics::texture;
+use crate::graphics::viewer::ModelViewer;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
@@ -126,9 +126,9 @@ impl crate::renderer::RenderPass for GizmoPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        gbuffer: &crate::gbuffer::GBuffer,
+        gbuffer: &crate::graphics::gbuffer::GBuffer,
         viewer: &ModelViewer,
-        _resources: &crate::resources::ResourceManager,
+        _resources: &crate::graphics::resources::ResourceManager,
         context: &GraphicsContext,
         renderer: &Renderer,
         _settings: &crate::settings::RenderSettings,

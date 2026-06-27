@@ -1,9 +1,9 @@
 use crate::context::GraphicsContext;
-use crate::gbuffer::GBuffer;
+use crate::graphics::gbuffer::GBuffer;
 use crate::renderer::{RenderPass, Renderer};
-use crate::resources::ResourceManager;
-use crate::texture::Texture;
-use crate::viewer::ModelViewer;
+use crate::graphics::resources::ResourceManager;
+use crate::graphics::texture::Texture;
+use crate::graphics::viewer::ModelViewer;
 use wgpu::util::DeviceExt;
 
 pub const SSAO_NOISE_DATA: [[u8; 4]; 16] = [

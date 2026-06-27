@@ -1,4 +1,4 @@
-use crate::gbuffer::GBuffer;
+use crate::graphics::gbuffer::GBuffer;
 use wgpu::util::DeviceExt;
 
 #[repr(C)]

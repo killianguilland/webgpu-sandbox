@@ -1,8 +1,8 @@
 use crate::context::GraphicsContext;
-use crate::model;
-use crate::model::Vertex;
+use crate::graphics::model;
+use crate::graphics::model::Vertex;
 use crate::renderer::{RenderPass, Renderer};
-use crate::viewer::ModelViewer;
+use crate::graphics::viewer::ModelViewer;
 
 pub struct GeometryPass {
     pub render_pipeline: wgpu::RenderPipeline,
@@ -57,22 +57,22 @@ impl GeometryPass {
                         entry_point: Some("fs_main"),
                         targets: &[
                             Some(wgpu::ColorTargetState {
-                                format: crate::gbuffer::GBuffer::ALBEDO_FORMAT,
+                                format: crate::graphics::gbuffer::GBuffer::ALBEDO_FORMAT,
                                 blend: None,
                                 write_mask: wgpu::ColorWrites::ALL,
                             }),
                             Some(wgpu::ColorTargetState {
-                                format: crate::gbuffer::GBuffer::NORMAL_FORMAT,
+                                format: crate::graphics::gbuffer::GBuffer::NORMAL_FORMAT,
                                 blend: None,
                                 write_mask: wgpu::ColorWrites::ALL,
                             }),
                             Some(wgpu::ColorTargetState {
-                                format: crate::gbuffer::GBuffer::PBR_FORMAT,
+                                format: crate::graphics::gbuffer::GBuffer::PBR_FORMAT,
                                 blend: None,
                                 write_mask: wgpu::ColorWrites::ALL,
                             }),
                             Some(wgpu::ColorTargetState {
-                                format: crate::gbuffer::GBuffer::VELOCITY_FORMAT,
+                                format: crate::graphics::gbuffer::GBuffer::VELOCITY_FORMAT,
                                 blend: None,
                                 write_mask: wgpu::ColorWrites::ALL,
                             }),
@@ -90,7 +90,7 @@ impl GeometryPass {
                         ..Default::default()
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
-                        format: crate::gbuffer::GBuffer::DEPTH_FORMAT,
+                        format: crate::graphics::gbuffer::GBuffer::DEPTH_FORMAT,
                         depth_write_enabled: Some(true),
                         depth_compare: Some(wgpu::CompareFunction::Less),
                         stencil: wgpu::StencilState::default(),
@@ -114,9 +114,9 @@ impl RenderPass for GeometryPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        gbuffer: &crate::gbuffer::GBuffer,
+        gbuffer: &crate::graphics::gbuffer::GBuffer,
         viewer: &ModelViewer,
-        resources: &crate::resources::ResourceManager,
+        resources: &crate::graphics::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
         _settings: &crate::settings::RenderSettings,
@@ -189,7 +189,7 @@ impl RenderPass for GeometryPass {
             render_pass.set_bind_group(3, env_bg, &[]);
         }
 
-        use crate::model::DrawModel;
+        use crate::graphics::model::DrawModel;
         for (model_name, (instance_buffer, count)) in &renderer.instance_buffers {
             if let Some(model) = resources.get_model(model_name) {
                 render_pass.set_vertex_buffer(1, instance_buffer.slice(..));
@@ -198,7 +198,7 @@ impl RenderPass for GeometryPass {
                     0..*count,
                     &renderer.camera_bind_group,
                     &renderer.light_bind_group,
-                    crate::model::MeshFilter::OpaqueOnly,
+                    crate::graphics::model::MeshFilter::OpaqueOnly,
                 );
             }
         }

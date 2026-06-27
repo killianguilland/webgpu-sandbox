@@ -1,7 +1,7 @@
 use wgpu::Operations;
 
 use crate::renderer::create_render_pipeline;
-use crate::texture;
+use crate::graphics::texture;
 
 /// Owns the render texture and controls tonemapping
 pub struct Hdr {

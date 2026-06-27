@@ -1,8 +1,8 @@
 use crate::context::GraphicsContext;
-use crate::model;
-use crate::model::Vertex;
+use crate::graphics::model;
+use crate::graphics::model::Vertex;
+use crate::graphics::viewer::ModelViewer;
 use crate::renderer::{RenderPass, Renderer};
-use crate::viewer::ModelViewer;
 
 pub struct TransparentPass {
     pub render_pipeline: wgpu::RenderPipeline,
@@ -71,7 +71,7 @@ impl TransparentPass {
                         ..Default::default()
                     },
                     depth_stencil: Some(wgpu::DepthStencilState {
-                        format: crate::gbuffer::GBuffer::DEPTH_FORMAT,
+                        format: crate::graphics::gbuffer::GBuffer::DEPTH_FORMAT,
                         depth_write_enabled: Some(false),
                         depth_compare: Some(wgpu::CompareFunction::Less),
                         stencil: wgpu::StencilState::default(),
@@ -95,9 +95,9 @@ impl RenderPass for TransparentPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         view: &wgpu::TextureView,
-        gbuffer: &crate::gbuffer::GBuffer,
+        gbuffer: &crate::graphics::gbuffer::GBuffer,
         viewer: &ModelViewer,
-        resources: &crate::resources::ResourceManager,
+        resources: &crate::graphics::resources::ResourceManager,
         _context: &GraphicsContext,
         renderer: &Renderer,
         _settings: &crate::settings::RenderSettings,
@@ -134,7 +134,7 @@ impl RenderPass for TransparentPass {
 
         render_pass.set_bind_group(5, &renderer.blur_target.bind_group, &[]);
 
-        use crate::model::DrawModel;
+        use crate::graphics::model::DrawModel;
         for (model_name, (instance_buffer, count)) in &renderer.instance_buffers {
             // If this model is loaded, draw it!
             if let Some(model) = resources.get_model(model_name) {
@@ -144,7 +144,7 @@ impl RenderPass for TransparentPass {
                     0..*count,
                     &renderer.camera_bind_group,
                     &renderer.light_bind_group,
-                    crate::model::MeshFilter::TransparentsOnly,
+                    crate::graphics::model::MeshFilter::TransparentsOnly,
                 );
             }
         }
