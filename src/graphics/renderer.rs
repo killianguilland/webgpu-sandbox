@@ -535,12 +535,14 @@ impl Renderer {
             &context.device,
             &context.config,
             wgpu::TextureFormat::R8Unorm,
+            &single_texture_bind_group_layout,
             "SSAO Target",
         );
         let blur_target = graphics::texture::RenderTarget::new(
             &context.device,
             &context.config,
             wgpu::TextureFormat::R8Unorm,
+            &single_texture_bind_group_layout,
             "Blur Target",
         );
 
@@ -578,8 +580,8 @@ impl Renderer {
 
     pub fn resize(&mut self, device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) {
         self.projection.resize(config.width, config.height);
-        self.ssao_target.resize(device, config);
-        self.blur_target.resize(device, config);
+        self.ssao_target.resize(device, config, &self.single_texture_bind_group_layout);
+        self.blur_target.resize(device, config, &self.single_texture_bind_group_layout);
     }
 
     pub fn update(

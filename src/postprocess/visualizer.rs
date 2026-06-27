@@ -59,7 +59,7 @@ impl Visualizer {
             bind_group_layouts: &[
                 Some(&gbuffer.layout),
                 Some(&settings_bind_group_layout),
-                Some(&renderer.blur_target.bind_group_layout),
+                Some(&renderer.single_texture_bind_group_layout),
             ],
             immediate_size: 0,
         });

@@ -12,7 +12,7 @@ impl BlurPass {
         // Pipeline Layout uses Renderer's ssao_target layout
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blur Pipeline Layout"),
-            bind_group_layouts: &[Some(&renderer.ssao_target.bind_group_layout)],
+            bind_group_layouts: &[Some(&renderer.single_texture_bind_group_layout)],
             immediate_size: 0,
         });
 

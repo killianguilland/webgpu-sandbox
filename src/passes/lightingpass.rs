@@ -24,7 +24,7 @@ impl LightingPass {
                         Some(&renderer.camera_bind_group_layout),
                         Some(&renderer.light_bind_group_layout),
                         Some(&renderer.environment_layout),
-                        Some(&renderer.blur_target.bind_group_layout),
+                        Some(&renderer.single_texture_bind_group_layout),
                         Some(&renderer.settings_bind_group_layout),
                     ],
                     immediate_size: 0,

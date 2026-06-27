@@ -6,7 +6,6 @@ use crate::graphics::texture;
 /// Owns the render texture and controls tonemapping
 pub struct Hdr {
     pipeline: wgpu::RenderPipeline,
-    layout: wgpu::BindGroupLayout,
     // bind_group: wgpu::BindGroup,
     // texture: texture::Texture,
 
@@ -25,33 +24,12 @@ impl Hdr {
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
         settings_layout: &wgpu::BindGroupLayout,
+        texture_layout: &wgpu::BindGroupLayout,
     ) -> Self {
         let width = config.width;
         let height = config.height;
 
         let format = wgpu::TextureFormat::Rgba16Float;
-
-        let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Hdr::layout"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
 
         let textures: [texture::Texture; 2] = std::array::from_fn(|_| {
             texture::Texture::create_2d_texture(
@@ -68,7 +46,7 @@ impl Hdr {
         let bind_groups = std::array::from_fn(|i| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Hdr::bind_group"),
-                layout: &layout,
+                layout: texture_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
@@ -85,7 +63,7 @@ impl Hdr {
         let shader = wgpu::include_wgsl!("../shaders/hdr.wgsl");
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
-            bind_group_layouts: &[Some(&layout), Some(settings_layout)],
+            bind_group_layouts: &[Some(texture_layout), Some(settings_layout)],
             immediate_size: 0,
         });
 
@@ -102,7 +80,6 @@ impl Hdr {
         Self {
             pipeline,
             bind_groups,
-            layout,
             textures,
             frame_index: 0,
             width,
@@ -111,7 +88,7 @@ impl Hdr {
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32) {
+    pub fn resize(&mut self, device: &wgpu::Device, width: u32, height: u32, texture_layout: &wgpu::BindGroupLayout) {
         self.textures = std::array::from_fn(|_| {
             texture::Texture::create_2d_texture(
                 device,
@@ -127,7 +104,7 @@ impl Hdr {
         self.bind_groups = std::array::from_fn(|i| {
             device.create_bind_group(&wgpu::BindGroupDescriptor {
                 label: Some("Hdr::bind_group"),
-                layout: &self.layout,
+                layout: texture_layout,
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,

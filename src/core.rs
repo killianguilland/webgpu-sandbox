@@ -44,6 +44,7 @@ impl Core {
             &context.device,
             &context.config,
             &renderer.settings_bind_group_layout,
+            &renderer.single_texture_bind_group_layout,
         );
 
         let gbuffer = gbuffer::GBuffer::new(&context.device, &context.config);
@@ -148,6 +149,7 @@ impl Core {
             &self.context.device,
             self.settings.width,
             self.settings.height,
+            &self.renderer.single_texture_bind_group_layout,
         );
         self.gbuffer.resize(&self.context.device, &scaled_config);
     }
