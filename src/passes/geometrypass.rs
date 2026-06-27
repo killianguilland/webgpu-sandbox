@@ -78,14 +78,7 @@ impl GeometryPass {
                             }),
                             Some(wgpu::ColorTargetState {
                                 format: hdr_format,
-                                blend: Some(wgpu::BlendState {
-                                    color: wgpu::BlendComponent {
-                                        src_factor: wgpu::BlendFactor::One,
-                                        dst_factor: wgpu::BlendFactor::One,
-                                        operation: wgpu::BlendOperation::Add,
-                                    },
-                                    alpha: wgpu::BlendComponent::REPLACE,
-                                }),
+                                blend: None,
                                 write_mask: wgpu::ColorWrites::ALL,
                             }),
                         ],
